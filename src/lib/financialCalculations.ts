@@ -90,7 +90,7 @@ export function simulate(p: FinancialProfile, s: Scenario): SimulationResult {
     months,
     adjustedMonthlyIncome: adjustedIncome(p.monthlyIncome, s.incomeReductionPct),
     lowestBalance: Math.min(...balances),
-    endingBalance: balances[balances.length - 1],
+    endingBalance: balances[balances.length - 1] ?? p.openingBalance,
     maxMonthlyGap: Math.max(0, ...months.map((m) => -m.netCashFlow)),
     maxReserveDeficit: Math.max(0, ...balances.map((b) => p.safetyBuffer - b)),
     firstMonthBelowBuffer: months.find((m) => m.belowBuffer)?.month ?? null,

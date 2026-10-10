@@ -114,7 +114,7 @@ function InputPage() {
           <Label htmlFor="reduction">Income reduction: <span className="tabular">{sc.incomeReductionPct}%</span></Label>
           <Slider id="reduction" min={0} max={100} step={5} value={[sc.incomeReductionPct]}
             aria-label="Income reduction percentage"
-            onValueChange={([v]) => setSc({ ...sc, incomeReductionPct: v })} />
+            onValueChange={([v]) => setSc({ ...sc, incomeReductionPct: v ?? 0 })} />
         </div>
 
         <div className="mt-6">

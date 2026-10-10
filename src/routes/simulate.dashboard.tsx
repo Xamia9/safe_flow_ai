@@ -36,7 +36,7 @@ function Dashboard() {
     );
   }
   const { baseline, active, deltaEndingBalance } = compareScenarios(profile, scenario);
-  const tone = (v: number) => (v < 0 ? "negative" : v < profile.safetyBuffer ? "warning" : "default") as const;
+  const tone = (v: number): "negative" | "warning" | "default" => (v < 0 ? "negative" : v < profile.safetyBuffer ? "warning" : "default");
 
   return (
     <div className="space-y-8">
@@ -85,7 +85,7 @@ function Dashboard() {
                 <td className="px-4 py-2">{formatVND(m.outflow)}</td>
                 <td className={cn("px-4 py-2", m.netCashFlow < 0 && "text-negative")}>{formatVND(m.netCashFlow)}</td>
                 <td className={cn("px-4 py-2 font-medium", m.negative ? "text-negative" : m.belowBuffer && "text-warning")}>{formatVND(m.closingBalance)}</td>
-                <td className="px-4 py-2 text-muted-foreground">{formatVND(baseline.months[i].closingBalance)}</td>
+                <td className="px-4 py-2 text-muted-foreground">{formatVND(baseline.months[i]?.closingBalance ?? 0)}</td>
               </tr>
             ))}
           </tbody>

@@ -2,8 +2,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export function AmountField({ id, label, hint, value, onChange, error, optional }: {
-  id: string; label: string; hint?: string; value: string;
-  onChange: (v: string) => void; error?: string; optional?: boolean;
+  id: string; label: string; hint?: string | undefined; value: string;
+  onChange: (v: string) => void; error?: string | undefined; optional?: boolean;
 }) {
   return (
     <div className="space-y-1.5">
