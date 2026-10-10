@@ -2,7 +2,7 @@
  * Deterministic SafeFlow AI cash-flow engine.
  *
  * Definitions (to be reconciled with the master specification):
- * - adjusted income   = income × (1 − reduction% / 100)
+ * - adjusted income   = income × (1 − reduction% / 100); 0 in interruption months
  * - monthly outflow   = essential + flexible (blank = 0) + debt + unexpected[m]
  * - net cash flow     = adjusted income − outflow
  * - closing balance   = previous closing (month 0 = opening) + net
@@ -34,6 +34,15 @@ export function fixedOutflow(p: FinancialProfile): number {
   return p.essentialExpenses + (p.flexibleExpenses ?? 0) + p.debtPayments;
 }
 
+/**
+ * Suggested reduction % derived from low-season income: (1 − low / normal) × 100.
+ * Returns 0 when normal income is 0 (no divide-by-zero) or low ≥ normal.
+ */
+export function suggestedReductionPct(normal: number, low: number): number {
+  if (!(normal > 0) || !(low >= 0) || low >= normal) return 0;
+  return (1 - low / normal) * 100;
+}
+
 export function minimumIncomeNeeded(p: FinancialProfile): number {
   return p.essentialExpenses + p.debtPayments;
 }
@@ -46,7 +55,8 @@ export function emergencyRunway(p: FinancialProfile): number {
 }
 
 export function projectMonths(p: FinancialProfile, s: Scenario): MonthProjection[] {
-  const income = adjustedIncome(p.monthlyIncome, s.incomeReductionPct);
+  const reduced = adjustedIncome(p.monthlyIncome, s.incomeReductionPct);
+  const it = s.interruption;
   const base = fixedOutflow(p);
   const out: MonthProjection[] = [];
   let balance = p.openingBalance;
@@ -54,6 +64,8 @@ export function projectMonths(p: FinancialProfile, s: Scenario): MonthProjection
     const unexpected = s.unexpectedExpenses
       .filter((e) => e.month === m)
       .reduce((a, e) => a + e.amount, 0);
+    const interrupted = !!it && m >= it.startMonth && m < it.startMonth + it.durationMonths;
+    const income = interrupted ? 0 : reduced;
     const outflow = base + unexpected;
     const net = income - outflow;
     balance += net;
@@ -105,7 +117,9 @@ export function compareScenarios(p: FinancialProfile, active: Scenario): Scenari
   const baselineScenario: Scenario = {
     name: "Baseline",
     horizon: active.horizon,
+    kind: "baseline",
     incomeReductionPct: 0,
+    interruption: null,
     unexpectedExpenses: [],
   };
   const baseline = simulate(p, baselineScenario);
