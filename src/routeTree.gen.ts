@@ -11,6 +11,9 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SimulateRouteImport } from './routes/simulate'
+import { Route as SimulateActionPlanRouteImport } from './routes/simulate.action-plan'
+import { Route as SimulateDashboardRouteImport } from './routes/simulate.dashboard'
+import { Route as SimulateInputRouteImport } from './routes/simulate.input'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,31 +25,71 @@ const SimulateRoute = SimulateRouteImport.update({
   path: '/simulate',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SimulateActionPlanRoute = SimulateActionPlanRouteImport.update({
+  id: '/action-plan',
+  path: '/action-plan',
+  getParentRoute: () => SimulateRoute,
+} as any)
+const SimulateDashboardRoute = SimulateDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => SimulateRoute,
+} as any)
+const SimulateInputRoute = SimulateInputRouteImport.update({
+  id: '/input',
+  path: '/input',
+  getParentRoute: () => SimulateRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/simulate': typeof SimulateRoute
+  '/simulate': typeof SimulateRouteWithChildren
+  '/simulate/action-plan': typeof SimulateActionPlanRoute
+  '/simulate/dashboard': typeof SimulateDashboardRoute
+  '/simulate/input': typeof SimulateInputRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/simulate': typeof SimulateRoute
+  '/simulate': typeof SimulateRouteWithChildren
+  '/simulate/action-plan': typeof SimulateActionPlanRoute
+  '/simulate/dashboard': typeof SimulateDashboardRoute
+  '/simulate/input': typeof SimulateInputRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/simulate': typeof SimulateRoute
+  '/simulate': typeof SimulateRouteWithChildren
+  '/simulate/action-plan': typeof SimulateActionPlanRoute
+  '/simulate/dashboard': typeof SimulateDashboardRoute
+  '/simulate/input': typeof SimulateInputRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/simulate'
+  fullPaths:
+    | '/'
+    | '/simulate'
+    | '/simulate/action-plan'
+    | '/simulate/dashboard'
+    | '/simulate/input'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/simulate'
-  id: '__root__' | '/' | '/simulate'
+  to:
+    | '/'
+    | '/simulate'
+    | '/simulate/action-plan'
+    | '/simulate/dashboard'
+    | '/simulate/input'
+  id:
+    | '__root__'
+    | '/'
+    | '/simulate'
+    | '/simulate/action-plan'
+    | '/simulate/dashboard'
+    | '/simulate/input'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  SimulateRoute: typeof SimulateRoute
+  SimulateRoute: typeof SimulateRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -65,12 +108,49 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SimulateRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/simulate/action-plan': {
+      id: '/simulate/action-plan'
+      path: '/action-plan'
+      fullPath: '/simulate/action-plan'
+      preLoaderRoute: typeof SimulateActionPlanRouteImport
+      parentRoute: typeof SimulateRoute
+    }
+    '/simulate/dashboard': {
+      id: '/simulate/dashboard'
+      path: '/dashboard'
+      fullPath: '/simulate/dashboard'
+      preLoaderRoute: typeof SimulateDashboardRouteImport
+      parentRoute: typeof SimulateRoute
+    }
+    '/simulate/input': {
+      id: '/simulate/input'
+      path: '/input'
+      fullPath: '/simulate/input'
+      preLoaderRoute: typeof SimulateInputRouteImport
+      parentRoute: typeof SimulateRoute
+    }
   }
 }
 
+interface SimulateRouteChildren {
+  SimulateActionPlanRoute: typeof SimulateActionPlanRoute
+  SimulateDashboardRoute: typeof SimulateDashboardRoute
+  SimulateInputRoute: typeof SimulateInputRoute
+}
+
+const SimulateRouteChildren: SimulateRouteChildren = {
+  SimulateActionPlanRoute: SimulateActionPlanRoute,
+  SimulateDashboardRoute: SimulateDashboardRoute,
+  SimulateInputRoute: SimulateInputRoute,
+}
+
+const SimulateRouteWithChildren = SimulateRoute._addFileChildren(
+  SimulateRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  SimulateRoute: SimulateRoute,
+  SimulateRoute: SimulateRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
