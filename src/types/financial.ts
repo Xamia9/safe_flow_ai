@@ -34,9 +34,9 @@ export interface IncomeInterruption {
 
 export interface Scenario {
   name: string;
-  kind?: ScenarioKind;
+  kind?: ScenarioKind | undefined;
   /** Months with zero income, applied on top of any reduction. */
-  interruption?: IncomeInterruption | null;
+  interruption?: IncomeInterruption | null | undefined;
   horizon: Horizon;
   /** 0 – 100. */
   incomeReductionPct: number;
