@@ -3,8 +3,10 @@ export type Horizon = 3 | 6 | 12;
 export interface FinancialProfile {
   /** Cash available at the start of month 1 (VND). */
   openingBalance: number;
-  /** Regular net monthly income before scenario adjustment (VND). */
+  /** Normal monthly net income before scenario adjustment (VND). */
   monthlyIncome: number;
+  /** Typical monthly net income during the low season (VND). Used to suggest a reduction. */
+  lowSeasonIncome?: number;
   /** Essential monthly expenses: housing, food, utilities, transport (VND). */
   essentialExpenses: number;
   /** Optional discretionary spending. Blank is treated as 0. */
@@ -22,8 +24,19 @@ export interface UnexpectedExpense {
   label?: string;
 }
 
+export type ScenarioKind = "baseline" | "income-reduction" | "interruption" | "unexpected-expense" | "combined";
+
+export interface IncomeInterruption {
+  /** 1-based first month with zero income. */
+  startMonth: number;
+  durationMonths: number;
+}
+
 export interface Scenario {
   name: string;
+  kind?: ScenarioKind;
+  /** Months with zero income, applied on top of any reduction. */
+  interruption?: IncomeInterruption | null;
   horizon: Horizon;
   /** 0 – 100. */
   incomeReductionPct: number;
