@@ -7,6 +7,7 @@ const nav = [
   { to: "/simulate/input", label: "Profile & Scenario" },
   { to: "/simulate/dashboard", label: "Risk Dashboard" },
   { to: "/simulate/action-plan", label: "Action Plan" },
+  { to: "/ai-status", label: "AI Status" },
 ] as const;
 
 export function AppHeader() {
