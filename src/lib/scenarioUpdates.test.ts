@@ -3,7 +3,7 @@ import { compareScenarios, simulate } from "./financialCalculations";
 import { buildPreset, suggestedReduction } from "./scenarioPresets";
 import { describeScenario, resetScenario, setDuration, setExpense, setHorizon, setReductionPct } from "./scenarioUpdates";
 import { parseProfileDraft, validateScenario } from "./validation";
-import type { FinancialProfile } from "@/types/financial";
+import type { FinancialProfile, Scenario } from "@/types/financial";
 
 const p: FinancialProfile = {
   openingBalance: 30e6, monthlyIncome: 20e6, lowSeasonIncome: 14e6,
@@ -74,5 +74,20 @@ describe("dashboard updates", () => {
     const r = simulate(p, buildPreset("interruption", 6, inputs));
     expect(r.lowestBalanceMonth).toBe(1);
     expect(describeScenario(buildPreset("interruption", 6, inputs))).toMatchObject({ reductionPct: 100, affectedMonths: "Month 1", expense: null });
+  });
+  it("describeScenario lists each unexpected expense separately", () => {
+    const s: Scenario = {
+      ...buildPreset("unexpected-expense", 6, inputs),
+      unexpectedExpenses: [
+        { month: 2, amount: 4e6 },
+        { month: 4, amount: 3e6 },
+      ],
+    };
+    const sum = describeScenario(s);
+    expect(sum.expenses).toEqual([
+      { amount: 4e6, month: 2 },
+      { amount: 3e6, month: 4 },
+    ]);
+    expect(sum.expense).toEqual({ amount: 7e6, month: 2 });
   });
 });

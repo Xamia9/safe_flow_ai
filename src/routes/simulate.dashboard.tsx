@@ -73,7 +73,12 @@ function Dashboard() {
           <Item k="Horizon" v={`${summary.horizon} months`} />
           {summary.reductionPct !== null && <Item k="Income reduction" v={`${summary.reductionPct}%`} />}
           {summary.affectedMonths && <Item k="Affected months" v={summary.affectedMonths} />}
-          {summary.expense && <Item k="Unexpected expense" v={`${formatVND(summary.expense.amount)} in month ${summary.expense.month}`} />}
+          {summary.expenses.length === 1 && summary.expenses[0] && (
+            <Item k="Unexpected expense" v={`${formatVND(summary.expenses[0].amount)} in month ${summary.expenses[0].month}`} />
+          )}
+          {summary.expenses.length > 1 && (
+            <Item k="Unexpected expenses" v={summary.expenses.map((e) => `${formatVND(e.amount)} (m${e.month})`).join(" · ")} />
+          )}
         </dl>
       </section>
 

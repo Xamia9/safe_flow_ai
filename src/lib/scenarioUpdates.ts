@@ -56,6 +56,8 @@ export interface ScenarioSummary {
   reductionPct: number | null;
   affectedMonths: string | null;
   expense: { amount: number; month: number } | null;
+  /** All unexpected expenses, for multi-expense scenarios. */
+  expenses: { amount: number; month: number }[];
   horizon: Horizon;
 }
 
@@ -69,12 +71,16 @@ export function describeScenario(s: Scenario): ScenarioSummary {
         : `Months ${w.startMonth}–${w.startMonth + w.durationMonths - 1}`
       : `Months 1–${s.horizon}`
     : null;
-  const total = s.unexpectedExpenses.reduce((a, e) => a + e.amount, 0);
+  const expenses = usesExpense(s)
+    ? s.unexpectedExpenses.map((e) => ({ amount: e.amount, month: e.month }))
+    : [];
+  const total = expenses.reduce((a, e) => a + e.amount, 0);
   return {
     label,
     reductionPct: usesReduction(s) ? s.incomeReductionPct : null,
     affectedMonths: affected,
-    expense: usesExpense(s) && s.unexpectedExpenses[0] ? { amount: total, month: s.unexpectedExpenses[0].month } : null,
+    expense: expenses[0] ? { amount: total, month: expenses[0].month } : null,
+    expenses,
     horizon: s.horizon,
   };
 }
