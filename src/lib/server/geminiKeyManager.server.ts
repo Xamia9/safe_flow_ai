@@ -18,6 +18,12 @@ const KEY_ENV_VARS = [
   "GEMINI_API_KEY_3",
   "GEMINI_API_KEY_4",
   "GEMINI_API_KEY_5",
+  "GEMINI_API_KEY_6",
+  "GEMINI_API_KEY_7",
+  "GEMINI_API_KEY_8",
+  "GEMINI_API_KEY_9",
+  "GEMINI_API_KEY_10",
+  "GEMINI_API_KEY_11",
 ];
 
 /** How long to skip a key that returned an auth/permission error. */
@@ -145,7 +151,7 @@ class GeminiKeyManager {
    *
    * - Tries the primary key first.
    * - On eligible failures, tries the next configured key.
-   * - Maximum `maxAttempts` attempts (default = number of configured keys, min 1, max 5).
+   * - Maximum `maxAttempts` attempts (default = number of configured keys, min 1, max 11).
    * - Applies a per-attempt timeout via AbortController.
    *
    * Returns the GenerateContentResponse, or throws a sanitized SafeGeminiError.
@@ -164,12 +170,12 @@ class GeminiKeyManager {
       throw new SafeGeminiError("no_keys", "No Gemini API keys are configured.");
     }
 
-    const model = options?.model ?? process.env["GEMINI_MODEL"] ?? "gemini-2.0-flash";
+    const model = options?.model ?? process.env["GEMINI_MODEL"] ?? "gemini-2.5-flash";
     const timeoutMs = options?.timeoutMs ?? 15_000;
     const maxAttempts = Math.min(
       options?.maxAttempts ?? this.keys.length,
       this.keys.length,
-      5,
+      11,
     );
 
     let lastError: unknown = null;

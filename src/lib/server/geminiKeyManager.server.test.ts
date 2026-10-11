@@ -24,6 +24,12 @@ const ENV_VARS = [
   "GEMINI_API_KEY_3",
   "GEMINI_API_KEY_4",
   "GEMINI_API_KEY_5",
+  "GEMINI_API_KEY_6",
+  "GEMINI_API_KEY_7",
+  "GEMINI_API_KEY_8",
+  "GEMINI_API_KEY_9",
+  "GEMINI_API_KEY_10",
+  "GEMINI_API_KEY_11",
   "GEMINI_MODEL",
 ];
 
@@ -86,6 +92,16 @@ describe("GeminiKeyManager — key loading", () => {
     expect(info.every((k) => k.isValid)).toBe(true);
   });
 
+  it("discovers all 11 key slots when every env var is set", () => {
+    setKeys("k1", "k2", "k3", "k4", "k5", "k6", "k7", "k8", "k9", "k10", "k11");
+    const info = getGeminiKeyManager().getKeyInfo();
+    expect(info).toHaveLength(11);
+    expect(info[0]!.envVar).toBe("GEMINI_API_KEY");
+    expect(info[1]!.envVar).toBe("GEMINI_API_KEY_2");
+    expect(info[10]!.envVar).toBe("GEMINI_API_KEY_11");
+    expect(info.every((k) => k.isValid)).toBe(true);
+  });
+
   it("ignores empty/whitespace-only values", () => {
     process.env["GEMINI_API_KEY"] = "  ";
     process.env["GEMINI_API_KEY_2"] = "real-key";
@@ -118,12 +134,12 @@ describe("GeminiKeyManager — successful call", () => {
     expect(response.text).toBe("Hello");
   });
 
-  it("uses default model gemini-2.0-flash when GEMINI_MODEL is not set", async () => {
+  it("uses default model gemini-2.5-flash when GEMINI_MODEL is not set", async () => {
     setKeys("key-1");
     mockSuccess();
     await getGeminiKeyManager().generateContent("test");
     expect(mockGenerateContent).toHaveBeenCalledWith(
-      expect.objectContaining({ model: "gemini-2.0-flash" }),
+      expect.objectContaining({ model: "gemini-2.5-flash" }),
     );
   });
 
@@ -314,12 +330,12 @@ describe("GeminiKeyManager — bounded retries", () => {
     expect(mockGenerateContent).toHaveBeenCalledTimes(1);
   });
 
-  it("caps maxAttempts at 5 even with many keys", async () => {
-    setKeys("k1", "k2", "k3", "k4", "k5", "k6", "k7");
+  it("caps maxAttempts at 11 even with many keys", async () => {
+    setKeys("k1", "k2", "k3", "k4", "k5", "k6", "k7", "k8", "k9", "k10", "k11", "k12", "k13");
     mockNetworkError();
     await expect(getGeminiKeyManager().generateContent("test"))
       .rejects.toMatchObject({ code: "service_error" });
-    expect(mockGenerateContent).toHaveBeenCalledTimes(5);
+    expect(mockGenerateContent).toHaveBeenCalledTimes(11);
   });
 });
 
