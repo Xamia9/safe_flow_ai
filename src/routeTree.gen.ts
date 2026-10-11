@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AiStatusRouteImport } from './routes/ai-status'
 import { Route as SimulateRouteImport } from './routes/simulate'
 import { Route as SimulateActionPlanRouteImport } from './routes/simulate.action-plan'
 import { Route as SimulateDashboardRouteImport } from './routes/simulate.dashboard'
@@ -18,6 +19,11 @@ import { Route as SimulateInputRouteImport } from './routes/simulate.input'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiStatusRoute = AiStatusRouteImport.update({
+  id: '/ai-status',
+  path: '/ai-status',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SimulateRoute = SimulateRouteImport.update({
@@ -43,6 +49,7 @@ const SimulateInputRoute = SimulateInputRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/ai-status': typeof AiStatusRoute
   '/simulate': typeof SimulateRouteWithChildren
   '/simulate/action-plan': typeof SimulateActionPlanRoute
   '/simulate/dashboard': typeof SimulateDashboardRoute
@@ -50,6 +57,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/ai-status': typeof AiStatusRoute
   '/simulate': typeof SimulateRouteWithChildren
   '/simulate/action-plan': typeof SimulateActionPlanRoute
   '/simulate/dashboard': typeof SimulateDashboardRoute
@@ -58,6 +66,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/ai-status': typeof AiStatusRoute
   '/simulate': typeof SimulateRouteWithChildren
   '/simulate/action-plan': typeof SimulateActionPlanRoute
   '/simulate/dashboard': typeof SimulateDashboardRoute
@@ -67,6 +76,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/ai-status'
     | '/simulate'
     | '/simulate/action-plan'
     | '/simulate/dashboard'
@@ -74,6 +84,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/ai-status'
     | '/simulate'
     | '/simulate/action-plan'
     | '/simulate/dashboard'
@@ -81,6 +92,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/ai-status'
     | '/simulate'
     | '/simulate/action-plan'
     | '/simulate/dashboard'
@@ -89,6 +101,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AiStatusRoute: typeof AiStatusRoute
   SimulateRoute: typeof SimulateRouteWithChildren
 }
 
@@ -99,6 +112,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai-status': {
+      id: '/ai-status'
+      path: '/ai-status'
+      fullPath: '/ai-status'
+      preLoaderRoute: typeof AiStatusRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/simulate': {
@@ -150,6 +170,7 @@ const SimulateRouteWithChildren = SimulateRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AiStatusRoute: AiStatusRoute,
   SimulateRoute: SimulateRouteWithChildren,
 }
 export const routeTree = rootRouteImport
