@@ -145,7 +145,7 @@ describe("reserve deficit (spec: max(0, -MinBalance))", () => {
   });
   it("zero when minimum balance is exactly zero", () => {
     const p = { ...profile, openingBalance: 17e6, monthlyIncome: 0, safetyBuffer: 0 };
-    const r = simulate(p, sc({ horizon: 1 }));
+    const r = simulate(p, sc({ horizon: 1 as Scenario["horizon"] }));
     expect(r.lowestBalance).toBe(0);
     expect(r.maxReserveDeficit).toBe(0);
   });
