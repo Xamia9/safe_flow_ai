@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { ClipboardList, FileText, Plus, RotateCcw, Sparkles, Trash2, TrendingUp, TrendingDown } from "lucide-react";
+import { ClipboardList, FileText, Lightbulb, Plus, RotateCcw, Trash2, TrendingUp, TrendingDown } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import { RiskBadge } from "@/components/common/RiskBadge";
@@ -25,6 +25,13 @@ import {
   runExperiment,
   updateAdjustment,
 } from "@/lib/actionExperiments";
+import {
+  type Recommendation,
+  type RecPriority,
+  priorityLabels,
+  priorityStyles,
+  selectRecommendations,
+} from "@/lib/recommendations";
 import type { FinancialProfile, RiskLevel, Scenario } from "@/types/financial";
 
 export const Route = createFileRoute("/simulate/action-plan")({
@@ -41,6 +48,8 @@ export const Route = createFileRoute("/simulate/action-plan")({
 
 function ActionPlan() {
   const { profile, scenario } = useSimulation();
+  const [exp, setExp] = useState<ExperimentState>({ adjustments: [] });
+
   if (!profile) {
     return (
       <div className="space-y-8">
@@ -51,15 +60,28 @@ function ActionPlan() {
       </div>
     );
   }
+
+  const simulateAdjustments = (adjustments: { kind: AdjustmentKind; amount: number }[]) => {
+    let next: ExperimentState = { adjustments: [] };
+    for (const a of adjustments) {
+      if (a.amount > 0) next = addAdjustment(next, { kind: a.kind, amount: a.amount });
+    }
+    setExp(next);
+    document.getElementById("experiment-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   return (
     <div className="space-y-8">
       <PageHeader eyebrow="Step 3" title="Action plan & report"
         description="Review your results and test how changes could improve your resilience. Projections are estimates, not guarantees." />
       <Summary profile={profile} scenario={scenario} />
-      <ExperimentPanel profile={profile} scenario={scenario} />
+      <RecommendationPanel
+        profile={profile}
+        scenario={scenario}
+        onSimulate={simulateAdjustments}
+      />
+      <ExperimentPanel id="experiment-panel" profile={profile} scenario={scenario} exp={exp} setExp={setExp} />
       <div className="grid gap-4 md:grid-cols-2">
-        <EmptyState icon={Sparkles} title="AI action plan — coming soon"
-          description="Personalised recommendations from the SafeFlow assistant are not available in this version." />
         <EmptyState icon={FileText} title="Report export — coming soon"
           description="Downloading a PDF report is not available yet." />
       </div>
@@ -94,11 +116,143 @@ function Summary({ profile, scenario }: { profile: FinancialProfile; scenario: S
   );
 }
 
+function RecommendationPanel({ profile, scenario, onSimulate }: {
+  profile: FinancialProfile;
+  scenario: Scenario;
+  onSimulate: (adjustments: { kind: AdjustmentKind; amount: number }[]) => void;
+}) {
+  const result = useMemo(() => simulate(profile, scenario), [profile, scenario]);
+  const recs = useMemo(
+    () => selectRecommendations({ profile, scenario, result }),
+    [profile, scenario, result],
+  );
+
+  if (recs.length === 0) {
+    return (
+      <section className="rounded-xl border bg-card p-6" aria-labelledby="rec-h">
+        <div className="flex items-center gap-2">
+          <Lightbulb className="h-5 w-5 text-teal" aria-hidden />
+          <h2 id="rec-h" className="text-lg font-semibold">Recommended next steps</h2>
+        </div>
+        <p className="mt-3 text-sm text-muted-foreground">
+          Your projection is stable — no balance falls below your safety buffer within this horizon.
+          No specific recommendation is needed based on the data entered. You can still use the
+ experiment panel below to test hypothetical changes.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="space-y-4" aria-labelledby="rec-h">
+      <div className="flex items-center gap-2">
+        <Lightbulb className="h-5 w-5 text-teal" aria-hidden />
+        <h2 id="rec-h" className="text-lg font-semibold">Recommended next steps</h2>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        These recommendations are generated from your simulation results using fixed rules, not AI.
+        They are not financial advice. Each card explains why it was selected and what it can and cannot tell you.
+      </p>
+      <div className="grid gap-4 lg:grid-cols-3">
+        {recs.map((rec) => (
+          <RecCard key={rec.solutionId} rec={rec} onSimulate={onSimulate} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function RecCard({ rec, onSimulate }: {
+  rec: Recommendation;
+  onSimulate: (adjustments: { kind: AdjustmentKind; amount: number }[]) => void;
+}) {
+  return (
+    <div className="flex flex-col rounded-xl border bg-card p-5">
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="text-base font-semibold">{rec.title}</h3>
+        <span className={cn("shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold", priorityStyles[rec.priority])}>
+          {priorityLabels[rec.priority]}
+        </span>
+      </div>
+
+      <ul className="mt-3 space-y-1 text-sm text-muted-foreground">
+        {rec.triggerReasons.map((reason, i) => (
+          <li key={i} className="flex gap-1.5">
+            <span className="text-teal" aria-hidden>•</span>
+            <span>{reason}</span>
+          </li>
+        ))}
+      </ul>
+
+      <ol className="mt-4 space-y-2 text-sm">
+        {rec.actionSteps.map((step, i) => (
+          <li key={i} className="flex gap-2">
+            <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-secondary text-xs font-medium tabular">{i + 1}</span>
+            <span>{step.text}</span>
+          </li>
+        ))}
+      </ol>
+
+      <div className="mt-4 rounded-lg bg-secondary/60 p-3 text-sm">
+        <p className="font-medium">Expected impact</p>
+        <p className="mt-1 text-muted-foreground">{rec.expectedImpact}</p>
+        {rec.impactStatus === "not_quantified" && (
+          <p className="mt-1 text-xs font-medium text-warning">
+            This impact cannot be quantified by the current simulation engine.
+          </p>
+        )}
+      </div>
+
+      {rec.limitations.length > 0 && (
+        <div className="mt-3 text-xs text-muted-foreground">
+          <p className="font-medium">Limitations</p>
+          <ul className="mt-1 list-disc pl-4 space-y-0.5">
+            {rec.limitations.map((l, i) => <li key={i}>{l}</li>)}
+          </ul>
+        </div>
+      )}
+
+      {rec.missingInformation.length > 0 && (
+        <div className="mt-2 text-xs text-muted-foreground">
+          <p className="font-medium">Information needed</p>
+          <ul className="mt-1 list-disc pl-4 space-y-0.5">
+            {rec.missingInformation.map((m, i) => <li key={i}>{m}</li>)}
+          </ul>
+        </div>
+      )}
+
+      <div className="mt-auto pt-4">
+        {rec.experimentSupported && rec.experimentAdjustments && rec.experimentAdjustments.some((a) => a.amount > 0) ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onSimulate(rec.experimentAdjustments!)}
+          >
+            <TrendingUp /> Simulate this adjustment
+          </Button>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            {rec.experimentSupported
+              ? "Add an adjustment manually in the experiment panel below to test this."
+              : "This action cannot be simulated with the current experiment tools."}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const adjustmentKinds: AdjustmentKind[] = ["cutFlexible", "cutEssentials", "raiseIncome"];
 const fmtInput = (n: number) => (Number.isFinite(n) ? n.toLocaleString("en-US") : "");
 
-function ExperimentPanel({ profile, scenario }: { profile: FinancialProfile; scenario: Scenario }) {
-  const [exp, setExp] = useState<ExperimentState>({ adjustments: [] });
+function ExperimentPanel({ id, profile, scenario, exp, setExp }: {
+  id: string;
+  profile: FinancialProfile;
+  scenario: Scenario;
+  exp: ExperimentState;
+  setExp: React.Dispatch<React.SetStateAction<ExperimentState>>;
+}) {
   const cmp = useMemo(
     () => runExperiment(profile, scenario, exp.adjustments),
     [profile, scenario, exp.adjustments],
@@ -111,7 +265,7 @@ function ExperimentPanel({ profile, scenario }: { profile: FinancialProfile; sce
   const reset = () => setExp(resetExperiment());
 
   return (
-    <section className="rounded-xl border bg-card p-6" aria-labelledby="exp-h">
+    <section id={id} className="rounded-xl border bg-card p-6" aria-labelledby="exp-h">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 id="exp-h" className="text-lg font-semibold">Test an adjustment</h2>
