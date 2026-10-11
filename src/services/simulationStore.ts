@@ -24,9 +24,12 @@ function load(): State {
     const raw = window.localStorage.getItem(KEY);
     if (!raw) return initial;
     const parsed = JSON.parse(raw) as Partial<State>;
+    const scenario = { ...defaultScenario, ...parsed.scenario };
+    // Older saves modelled interruption as "zero income on top of reduction" with 0%.
+    if (scenario.kind === "interruption" && scenario.incomeReductionPct === 0) scenario.incomeReductionPct = 100;
     return {
       draft: parsed.draft ?? {},
-      scenario: { ...defaultScenario, ...parsed.scenario },
+      scenario,
       profile: parsed.profile ?? null,
     };
   } catch {
