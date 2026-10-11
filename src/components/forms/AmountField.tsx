@@ -1,5 +1,6 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { parseAmount } from "@/lib/validation";
 
 export function AmountField({ id, label, hint, value, onChange, error, optional }: {
   id: string; label: string; hint?: string | undefined; value: string;
@@ -15,7 +16,25 @@ export function AmountField({ id, label, hint, value, onChange, error, optional 
           id={id}
           inputMode="numeric"
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => {
+            const raw = e.target.value;
+            const n = parseAmount(raw);
+            if (n === null) {
+              onChange(raw === "" ? "" : raw.replace(/[^\d]/g, ""));
+              return;
+            }
+            if (Number.isNaN(n)) {
+              onChange(raw.replace(/[^\d]/g, ""));
+              return;
+            }
+            onChange(n.toLocaleString("en-US"));
+          }}
+          onBlur={(e) => {
+            const n = parseAmount(e.target.value);
+            if (n !== null && !Number.isNaN(n)) {
+              onChange(n.toLocaleString("en-US"));
+            }
+          }}
           aria-invalid={!!error}
           aria-describedby={hint || error ? `${id}-desc` : undefined}
           className="pr-12 tabular"

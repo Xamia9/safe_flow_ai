@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight, ClipboardList, LineChart, ListChecks } from "lucide-react";
+import { ArrowRight, ClipboardList, LineChart, ListChecks, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/")({
@@ -19,6 +19,20 @@ const steps = [
   { icon: LineChart, title: "Run a scenario", text: "Reduce income by 0–100% and add one-off costs over 3, 6 or 12 months." },
   { icon: ListChecks, title: "Review your risk", text: "See your lowest balance, first shortfall month and a transparent Low / Medium / High rating." },
 ];
+
+const team = [
+  "Giang Xuân Mai",
+  "Phí Minh Anh",
+  "Nguyễn Lan Phương",
+  "Lê Trần Diễm Quỳnh",
+];
+
+function initials(name: string): string {
+  const words = name.trim().split(/\s+/);
+  const first = words[0] ?? "";
+  const last = words[words.length - 1] ?? "";
+  return `${first[0] ?? ""}${last[0] ?? ""}`.toUpperCase();
+}
 
 function Home() {
   return (
@@ -40,11 +54,12 @@ function Home() {
           </div>
         </div>
       </section>
+
       <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
         <h2 className="text-2xl font-bold">How it works</h2>
         <ol className="mt-8 grid gap-4 md:grid-cols-3">
           {steps.map((s, i) => (
-            <li key={s.title} className="rounded-xl border bg-card p-6">
+            <li key={s.title} className="rounded-xl border bg-card p-6 transition-shadow hover:shadow-sm">
               <s.icon className="h-6 w-6 text-teal" aria-hidden />
               <p className="mt-4 text-xs font-semibold text-muted-foreground">Step {i + 1}</p>
               <h3 className="mt-1 text-lg font-semibold">{s.title}</h3>
@@ -68,6 +83,40 @@ function Home() {
               <li>No account or bank connection required</li>
               <li>Your data is not stored on a server</li>
             </ul>
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6" aria-labelledby="team-h">
+        <div className="flex items-center gap-3">
+          <Users className="h-6 w-6 text-teal" aria-hidden />
+          <h2 id="team-h" className="text-2xl font-bold">Meet the team</h2>
+        </div>
+        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+          The people behind SafeFlow AI.
+        </p>
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {team.map((name) => (
+            <div key={name} className="flex flex-col items-center rounded-xl border bg-card p-6 text-center transition-shadow hover:shadow-sm">
+              <div className="grid h-16 w-16 place-items-center rounded-full bg-secondary text-lg font-semibold text-primary">
+                {initials(name)}
+              </div>
+              <p className="mt-4 font-medium">{name}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
+        <div className="rounded-2xl border bg-card p-8 text-center sm:p-12">
+          <h2 className="text-2xl font-bold sm:text-3xl">Ready to stress-test your cash flow?</h2>
+          <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
+            See how your savings hold up under income shocks and unexpected costs. No sign-up, no data leaves your browser.
+          </p>
+          <div className="mt-6 flex justify-center">
+            <Button asChild size="lg" className="bg-teal text-navy hover:bg-teal/90">
+              <Link to="/simulate/input">Start a simulation <ArrowRight /></Link>
+            </Button>
           </div>
         </div>
       </section>

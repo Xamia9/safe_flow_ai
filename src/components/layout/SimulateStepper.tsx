@@ -11,7 +11,7 @@ export function SimulateStepper() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const current = steps.findIndex((s) => path.startsWith(s.to));
   return (
-    <nav aria-label="Simulation steps" className="border-b bg-card">
+    <nav aria-label="Simulation steps" className="border-b bg-card/95 backdrop-blur">
       <ol className="mx-auto flex max-w-6xl gap-2 overflow-x-auto px-4 py-3 sm:px-6">
         {steps.map((s, i) => (
           <li key={s.to} className="flex shrink-0 items-center gap-2">
