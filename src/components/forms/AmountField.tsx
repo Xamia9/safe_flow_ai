@@ -1,16 +1,10 @@
-import { type ChangeEvent } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { parseAmount } from "@/lib/validation";
-import { formatWithCaret } from "@/lib/formatInput";
 
 export function AmountField({ id, label, hint, value, onChange, error, optional }: {
   id: string; label: string; hint?: string | undefined; value: string;
   onChange: (v: string) => void; error?: string | undefined; optional?: boolean;
 }) {
-  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
-    onChange(formatWithCaret(e.target.value, e.target));
-  };
   return (
     <div className="space-y-1.5">
       <Label htmlFor={id}>
@@ -21,13 +15,7 @@ export function AmountField({ id, label, hint, value, onChange, error, optional 
           id={id}
           inputMode="numeric"
           value={value}
-          onChange={handleChange}
-          onBlur={(e) => {
-            const n = parseAmount(e.target.value);
-            if (n !== null && !Number.isNaN(n)) {
-              onChange(n.toLocaleString("en-US"));
-            }
-          }}
+          onChange={(e) => onChange(e.target.value)}
           aria-invalid={!!error}
           aria-describedby={hint || error ? `${id}-desc` : undefined}
           className="pr-12 tabular"

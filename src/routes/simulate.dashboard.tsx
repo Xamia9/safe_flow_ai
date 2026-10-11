@@ -12,7 +12,6 @@ import { Slider } from "@/components/ui/slider";
 import { compareScenarios } from "@/lib/financialCalculations";
 import { formatMonths, formatVND } from "@/lib/formatCurrency";
 import { parseAmount } from "@/lib/validation";
-import { formatWithCaret } from "@/lib/formatInput";
 import {
   describeScenario, resetScenario, setDuration, setExpense, setReductionPct, usesExpense, usesReduction,
 } from "@/lib/scenarioUpdates";
@@ -216,7 +215,7 @@ function Controls({ scenario: sc, profile, onChange }: { scenario: Scenario; pro
               <div className="flex items-center justify-between gap-2">
                 <Label htmlFor="d-amt">Unexpected expense (VND)</Label>
                 <Input id="d-amt" inputMode="numeric" className="h-8 w-40 tabular" value={exp.amount.toLocaleString("en-US")}
-                  onChange={(e) => { const formatted = formatWithCaret(e.target.value, e.target); const n = parseAmount(formatted); onChange(setExpense(sc, { amount: n === null || Number.isNaN(n) ? 0 : n })); }} />
+                  onChange={(e) => { const n = parseAmount(e.target.value); onChange(setExpense(sc, { amount: n === null || Number.isNaN(n) ? 0 : n })); }} />
               </div>
               <Slider aria-label="Unexpected expense amount" min={0} max={sliderMax} step={100_000} value={[exp.amount]}
                 onValueChange={([v]) => onChange(setExpense(sc, { amount: v ?? 0 }))} />

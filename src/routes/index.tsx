@@ -40,12 +40,11 @@ function Home() {
           </div>
         </div>
       </section>
-
       <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
-        <h2 className="text-2xl font-bold text-foreground">How it works</h2>
+        <h2 className="text-2xl font-bold">How it works</h2>
         <ol className="mt-8 grid gap-4 md:grid-cols-3">
           {steps.map((s, i) => (
-            <li key={s.title} className="rounded-xl border bg-card p-6 transition-shadow hover:shadow-sm">
+            <li key={s.title} className="rounded-xl border bg-card p-6">
               <s.icon className="h-6 w-6 text-teal" aria-hidden />
               <p className="mt-4 text-xs font-semibold text-muted-foreground">Step {i + 1}</p>
               <h3 className="mt-1 text-lg font-semibold">{s.title}</h3>
