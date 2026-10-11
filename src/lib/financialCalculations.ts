@@ -10,12 +10,12 @@
  * - closing balance   = previous closing (month 0 = opening) + net
  * - lowest balance    = min of month-end balances
  * - max monthly gap   = max(0, max(−net))
- * - reserve deficit   = max(0, max(buffer − closing))
+ * - reserve deficit   = max(0, −MinBalance)  (shortfall below zero, not below buffer)
  * - below buffer      = closing < buffer;  negative = closing < 0 (exact 0 is not negative)
  * - runway (0 income) = opening / (essential + debt); ∞ when that sum is 0; 0 if opening ≤ 0
  * - minimum income    = essential + debt
- * Risk: High = any negative month; Medium = any month below buffer or any negative net flow;
- * Low otherwise. No probabilities or scores are produced. Full precision; round for display only.
+ * Risk: High = any negative month; Medium = any month below buffer (but none negative);
+ * Low = all months at or above buffer. No probabilities or scores are produced. Full precision; round for display only.
  */
 import type {
   FinancialProfile,
@@ -91,10 +91,8 @@ export function classifyRisk(months: MonthProjection[]): RiskAssessment {
   const reasons: string[] = [];
   const below = months.find((m) => m.belowBuffer);
   if (below) reasons.push(`Balance falls below your safety buffer in month ${below.month}.`);
-  const deficit = months.find((m) => m.netCashFlow < 0);
-  if (deficit) reasons.push(`Spending exceeds income in month ${deficit.month}.`);
   if (reasons.length) return { level: "Medium", reasons };
-  return { level: "Low", reasons: ["Balance stays above your safety buffer with no monthly shortfall."] };
+  return { level: "Low", reasons: ["Balance stays at or above your safety buffer throughout the projection."] };
 }
 
 export function simulate(p: FinancialProfile, s: Scenario): SimulationResult {
@@ -107,7 +105,7 @@ export function simulate(p: FinancialProfile, s: Scenario): SimulationResult {
     lowestBalanceMonth: months.length ? months.reduce((a, m) => (m.closingBalance < a.closingBalance ? m : a)).month : null,
     endingBalance: balances[balances.length - 1] ?? p.openingBalance,
     maxMonthlyGap: Math.max(0, ...months.map((m) => -m.netCashFlow)),
-    maxReserveDeficit: Math.max(0, ...balances.map((b) => p.safetyBuffer - b)),
+    maxReserveDeficit: Math.max(0, -Math.min(...balances)),
     firstMonthBelowBuffer: months.find((m) => m.belowBuffer)?.month ?? null,
     firstNegativeMonth: months.find((m) => m.negative)?.month ?? null,
     runwayMonthsZeroIncome: emergencyRunway(p),

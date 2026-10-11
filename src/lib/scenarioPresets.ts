@@ -16,6 +16,9 @@ export const PRESET_DEFAULTS = {
   interruptionMonths: 1,
   /** Unexpected expense = this many months of essential expenses, in month 1. */
   unexpectedExpenseMonthsOfEssentials: 1,
+  /** Combined Shock: fixed illustrative reduction and duration. */
+  combinedReductionPct: 50,
+  combinedDurationMonths: 3,
 } as const;
 
 export const presetMeta: PresetMeta[] = [
@@ -56,7 +59,12 @@ export function buildPreset(kind: ScenarioKind, horizon: Horizon, i: PresetInput
     case "unexpected-expense":
       return { ...base, unexpectedExpenses: [expense] };
     case "combined":
-      return { ...base, incomeReductionPct: reduction, interruption: whole, unexpectedExpenses: [expense] };
+      return {
+        ...base,
+        incomeReductionPct: PRESET_DEFAULTS.combinedReductionPct,
+        interruption: { startMonth: 1, durationMonths: Math.min(PRESET_DEFAULTS.combinedDurationMonths, horizon) },
+        unexpectedExpenses: [expense],
+      };
     default:
       return base;
   }

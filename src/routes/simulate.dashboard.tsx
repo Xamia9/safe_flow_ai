@@ -90,7 +90,7 @@ function Dashboard() {
         <StatCard label="First negative-balance month" value={monthOr(active.firstNegativeMonth)}
           tone={active.firstNegativeMonth ? "negative" : "positive"} hint="Savings fully used up" />
         <StatCard label="Max reserve deficit" value={formatVND(active.maxReserveDeficit)} tone={active.maxReserveDeficit > 0 ? "warning" : "default"}
-          hint="Largest shortfall below the safety buffer" />
+          hint="Largest shortfall below zero when the balance goes negative" />
         <StatCard label="Max monthly cash-flow gap" value={formatVND(active.maxMonthlyGap)} tone={active.maxMonthlyGap > 0 ? "warning" : "default"}
           hint="Before using savings — a gap is not running out of money" />
         <StatCard label="Runway with zero income" value={formatMonths(active.runwayMonthsZeroIncome)} hint="Savings ÷ (essentials + debt)" />
