@@ -35,7 +35,7 @@ export interface IncomeInterruption {
 export interface Scenario {
   name: string;
   kind?: ScenarioKind | undefined;
-  /** Months with zero income, applied on top of any reduction. */
+  /** Affected window for the income reduction. null/undefined = whole horizon. */
   interruption?: IncomeInterruption | null | undefined;
   horizon: Horizon;
   /** 0 – 100. */
@@ -65,6 +65,8 @@ export interface SimulationResult {
   months: MonthProjection[];
   adjustedMonthlyIncome: number;
   lowestBalance: number;
+  /** Earliest month at which the lowest balance occurs. */
+  lowestBalanceMonth: number | null;
   endingBalance: number;
   maxMonthlyGap: number;
   maxReserveDeficit: number;

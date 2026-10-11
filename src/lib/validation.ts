@@ -39,8 +39,6 @@ export function parseProfileDraft(d: Record<string, string>): ParsedProfile {
   }
   const flex = parseAmount(d["flexibleExpenses"]);
   if (flex !== null && !nonNeg(flex)) errors["flexibleExpenses"] = "Enter a number that is zero or greater, or leave blank.";
-  const buf = parseAmount(d["safetyBuffer"]);
-  if (buf !== null && !nonNeg(buf)) errors["safetyBuffer"] = "Enter a number that is zero or greater, or leave blank.";
 
   if (v["lowSeasonIncome"] !== undefined && v["monthlyIncome"] !== undefined && v["lowSeasonIncome"] > v["monthlyIncome"])
     warnings["lowSeasonIncome"] = "Low-season income is higher than normal income. Please confirm this is correct.";
@@ -56,7 +54,8 @@ export function parseProfileDraft(d: Record<string, string>): ParsedProfile {
       debtPayments: debt,
       openingBalance: v["openingBalance"]!,
       flexibleExpenses: flex ?? 0,
-      safetyBuffer: buf ?? essential + debt,
+      // Safety buffer is always B_min = E + D.
+      safetyBuffer: essential + debt,
     },
     errors,
     warnings,
@@ -84,6 +83,8 @@ export function validateScenario(s: Scenario): Errors {
       e["interruption.start"] = `Start month must be 1–${s.horizon}.`;
     if (!Number.isInteger(durationMonths) || durationMonths < 1)
       e["interruption.duration"] = "Duration must be at least 1 month.";
+    else if (startMonth + durationMonths - 1 > s.horizon)
+      e["interruption.duration"] = `Affected months must end by month ${s.horizon}.`;
   }
   s.unexpectedExpenses.forEach((x, i) => {
     if (!Number.isInteger(x.month) || x.month < 1 || x.month > s.horizon)
