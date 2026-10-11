@@ -2,7 +2,9 @@
  * Deterministic SafeFlow AI cash-flow engine.
  *
  * Definitions (to be reconciled with the master specification):
- * - adjusted income   = income × (1 − reduction% / 100); 0 in interruption months
+ * - adjusted income   = income × (1 − reduction% / 100) inside the affected window
+ *                       (scenario.interruption = {startMonth, durationMonths}); null window = every month.
+ *                       Months outside the window keep normal income. 100% reduction = zero income.
  * - monthly outflow   = essential + flexible (blank = 0) + debt + unexpected[m]
  * - net cash flow     = adjusted income − outflow
  * - closing balance   = previous closing (month 0 = opening) + net
@@ -65,7 +67,7 @@ export function projectMonths(p: FinancialProfile, s: Scenario): MonthProjection
       .filter((e) => e.month === m)
       .reduce((a, e) => a + e.amount, 0);
     const interrupted = !!it && m >= it.startMonth && m < it.startMonth + it.durationMonths;
-    const income = interrupted ? 0 : reduced;
+    const income = !it || interrupted ? reduced : p.monthlyIncome;
     const outflow = base + unexpected;
     const net = income - outflow;
     balance += net;
@@ -102,6 +104,7 @@ export function simulate(p: FinancialProfile, s: Scenario): SimulationResult {
     months,
     adjustedMonthlyIncome: adjustedIncome(p.monthlyIncome, s.incomeReductionPct),
     lowestBalance: Math.min(...balances),
+    lowestBalanceMonth: months.length ? months.reduce((a, m) => (m.closingBalance < a.closingBalance ? m : a)).month : null,
     endingBalance: balances[balances.length - 1] ?? p.openingBalance,
     maxMonthlyGap: Math.max(0, ...months.map((m) => -m.netCashFlow)),
     maxReserveDeficit: Math.max(0, ...balances.map((b) => p.safetyBuffer - b)),

@@ -12,7 +12,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { parseAmount, parseProfileDraft, validateScenario, type Errors } from "@/lib/validation";
-import { buildPreset, ILLUSTRATIVE, presetMeta, suggestedReduction } from "@/lib/scenarioPresets";
+import { buildPreset, presetMeta, suggestedReduction } from "@/lib/scenarioPresets";
+import { setDuration, setHorizon, usesReduction } from "@/lib/scenarioUpdates";
 import { compareScenarios } from "@/lib/financialCalculations";
 import { formatVND } from "@/lib/formatCurrency";
 import { resetSimulation, setDraftValue, setSimulation, useSimulation } from "@/services/simulationStore";
@@ -126,11 +127,7 @@ function InputPage() {
           <div className="mt-2 inline-flex rounded-lg border p-1" role="radiogroup" aria-label="Forecast horizon">
             {([3, 6, 12] as Horizon[]).map((h) => (
               <button type="button" key={h} role="radio" aria-checked={sc.horizon === h}
-                onClick={() => setSc({
-                  ...sc, horizon: h,
-                  unexpectedExpenses: sc.unexpectedExpenses.filter((x) => x.month <= h),
-                  interruption: sc.interruption && sc.interruption.startMonth > h ? { ...sc.interruption, startMonth: 1 } : sc.interruption,
-                })}
+                onClick={() => setSc(setHorizon(sc, h))}
                 className={cn("rounded-md px-4 py-1.5 text-sm font-medium", sc.horizon === h ? "bg-navy text-navy-foreground" : "text-muted-foreground")}>
                 {h} months
               </button>
@@ -158,51 +155,48 @@ function InputPage() {
         <div className="mt-6 grid gap-6 lg:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="reduction">Income reduction (%)</Label>
-            <Input id="reduction" type="number" min={0} max={100} step={0.1} className="w-32 tabular"
+            <Input id="reduction" type="number" min={0} max={100} step={1} className="w-32 tabular"
               value={sc.incomeReductionPct}
               aria-invalid={!!errors["incomeReductionPct"]}
               onChange={(e) => setSc({ ...sc, incomeReductionPct: e.target.value === "" ? 0 : Number(e.target.value) })} />
             <p className={cn("text-xs", errors["incomeReductionPct"] ? "text-negative" : "text-muted-foreground")}>
               {errors["incomeReductionPct"] ?? (suggestion.derived
-                ? `Suggested from your low-season income: ${suggestion.pct.toFixed(1)}%.`
-                : `Illustrative assumption: ${ILLUSTRATIVE.fallbackReductionPct}% (enter a lower low-season income to get a suggestion).`)}
+                ? `Suggested from your low-season income: ${suggestion.pct.toFixed(1)}% (rounded to ${Math.round(suggestion.pct)}%).`
+                : "No suggested reduction available (low-season income is not below normal income). Starting at 0% — edit as needed.")}
             </p>
-            {suggestion.derived && Math.abs(sc.incomeReductionPct - Math.round(suggestion.pct * 10) / 10) > 0.05 && (
+            {suggestion.derived && sc.incomeReductionPct !== Math.round(suggestion.pct) && (
               <Button type="button" variant="link" size="sm" className="h-auto p-0"
-                onClick={() => setSc({ ...sc, incomeReductionPct: Math.round(suggestion.pct * 10) / 10 })}>
-                Use suggested {suggestion.pct.toFixed(1)}%
+                onClick={() => setSc({ ...sc, incomeReductionPct: Math.round(suggestion.pct) })}>
+                Use suggested {Math.round(suggestion.pct)}%
               </Button>
             )}
           </div>
 
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <input id="int-on" type="checkbox" className="h-4 w-4 accent-[var(--teal)]" checked={!!sc.interruption}
-                onChange={(e) => setSc({ ...sc, interruption: e.target.checked ? { startMonth: ILLUSTRATIVE.interruptionStartMonth, durationMonths: ILLUSTRATIVE.interruptionMonths } : null })} />
-              <Label htmlFor="int-on">Months with no income</Label>
-            </div>
-            {sc.interruption && (
+          {usesReduction(sc) && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Affected months</p>
               <div className="flex flex-wrap gap-3">
                 <div>
                   <Label htmlFor="int-start" className="text-xs">Starting month</Label>
-                  <select id="int-start" value={sc.interruption.startMonth}
-                    onChange={(e) => setSc({ ...sc, interruption: { ...sc.interruption!, startMonth: Number(e.target.value) } })}
+                  <select id="int-start" value={sc.interruption?.startMonth ?? 1}
+                    onChange={(e) => setSc(setDuration({ ...sc, interruption: { startMonth: Number(e.target.value), durationMonths: sc.interruption?.durationMonths ?? sc.horizon } }, sc.interruption?.durationMonths ?? sc.horizon))}
                     className="mt-1 block h-9 rounded-md border border-input bg-card px-2 text-sm">
                     {Array.from({ length: sc.horizon }, (_, k) => <option key={k} value={k + 1}>Month {k + 1}</option>)}
                   </select>
                 </div>
                 <div>
                   <Label htmlFor="int-dur" className="text-xs">Number of months</Label>
-                  <Input id="int-dur" type="number" min={1} max={sc.horizon} className="mt-1 w-24 tabular"
-                    value={sc.interruption.durationMonths} aria-invalid={!!errors["interruption.duration"]}
-                    onChange={(e) => setSc({ ...sc, interruption: { ...sc.interruption!, durationMonths: Number(e.target.value) } })} />
+                  <Input id="int-dur" type="number" min={1} max={sc.horizon - (sc.interruption?.startMonth ?? 1) + 1} step={1} className="mt-1 w-24 tabular"
+                    value={sc.interruption?.durationMonths ?? sc.horizon} aria-invalid={!!errors["interruption.duration"]}
+                    onChange={(e) => setSc(setDuration(sc, Number(e.target.value)))} />
                 </div>
                 {(errors["interruption.start"] || errors["interruption.duration"]) && (
                   <p className="w-full text-xs text-negative">{errors["interruption.start"] ?? errors["interruption.duration"]}</p>
                 )}
               </div>
-            )}
-          </div>
+              <p className="text-xs text-muted-foreground">The reduction applies only in these months. 100% means no income.</p>
+            </div>
+          )}
         </div>
 
         <div className="mt-6">
@@ -243,10 +237,9 @@ function InputPage() {
           </Button>
         </div>
 
-        <div className="mt-6 max-w-sm">
-          <AmountField id="safetyBuffer" label="Safety buffer" optional value={draft["safetyBuffer"] ?? ""}
-            error={errors["safetyBuffer"]} onChange={(v) => setDraftValue("safetyBuffer", v)}
-            hint={`Balance you want to keep. Illustrative default if blank: one month of essentials + debt (${formatVND(presetInputs.essentialExpenses + num("debtPayments"))}).`} />
+        <div className="mt-6 rounded-lg bg-secondary p-3 text-sm">
+          <p className="font-medium">Safety buffer: {formatVND(presetInputs.essentialExpenses + num("debtPayments"))}</p>
+          <p className="text-xs text-muted-foreground">Always one month of essential expenses plus mandatory debt payment (E + D).</p>
         </div>
       </section>
 
