@@ -4,7 +4,6 @@ import { ClipboardList, FileText, Plus, RotateCcw, Sparkles, Trash2, TrendingUp,
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import { RiskBadge } from "@/components/common/RiskBadge";
-import { StatCard } from "@/components/common/StatCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,6 +11,7 @@ import { simulate } from "@/lib/financialCalculations";
 import { formatVND } from "@/lib/formatCurrency";
 import { parseAmount } from "@/lib/validation";
 import { useSimulation } from "@/services/simulationStore";
+import { describeScenario } from "@/lib/scenarioUpdates";
 import { cn } from "@/lib/utils";
 import {
   type Adjustment,
@@ -25,7 +25,7 @@ import {
   runExperiment,
   updateAdjustment,
 } from "@/lib/actionExperiments";
-import type { FinancialProfile, Scenario } from "@/types/financial";
+import type { FinancialProfile, RiskLevel, Scenario } from "@/types/financial";
 
 export const Route = createFileRoute("/simulate/action-plan")({
   head: () => ({
@@ -69,6 +69,7 @@ function ActionPlan() {
 
 function Summary({ profile, scenario }: { profile: FinancialProfile; scenario: Scenario }) {
   const r = simulate(profile, scenario);
+  const summary = describeScenario(scenario);
   return (
     <section className="rounded-xl border bg-card p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -77,6 +78,7 @@ function Summary({ profile, scenario }: { profile: FinancialProfile; scenario: S
       </div>
       <dl className="mt-4 grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2">
         {[
+          ["Scenario", summary.label],
           ["Horizon", `${scenario.horizon} months`],
           ["Income reduction", `${scenario.incomeReductionPct}%`],
           ["Lowest projected balance", formatVND(r.lowestBalance)],
@@ -126,25 +128,27 @@ function ExperimentPanel({ profile, scenario }: { profile: FinancialProfile; sce
 
       <ul className="mt-5 space-y-3">
         {exp.adjustments.map((a, i) => (
-          <li key={i} className="flex flex-wrap items-end gap-3 rounded-lg border p-3">
-            <div className="min-w-[180px]">
-              <Label htmlFor={`kind-${i}`} className="text-xs">Adjustment</Label>
-              <select id={`kind-${i}`} value={a.kind}
-                onChange={(e) => patchOne(i, { kind: e.target.value as AdjustmentKind })}
-                className="mt-1 block h-9 w-full rounded-md border border-input bg-card px-2 text-sm">
-                {adjustmentKinds.map((k) => <option key={k} value={k}>{adjustmentLabels[k]}</option>)}
-              </select>
+          <li key={i} className="rounded-lg border p-3 sm:p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-4">
+              <div className="flex-1 min-w-[160px]">
+                <Label htmlFor={`kind-${i}`} className="text-xs">Adjustment</Label>
+                <select id={`kind-${i}`} value={a.kind}
+                  onChange={(e) => patchOne(i, { kind: e.target.value as AdjustmentKind })}
+                  className="mt-1 block h-9 w-full rounded-md border border-input bg-card px-2 text-sm">
+                  {adjustmentKinds.map((k) => <option key={k} value={k}>{adjustmentLabels[k]}</option>)}
+                </select>
+              </div>
+              <div className="sm:w-48">
+                <Label htmlFor={`amt-${i}`} className="text-xs">Monthly amount (VND)</Label>
+                <Input id={`amt-${i}`} inputMode="numeric" className="mt-1 w-full tabular" value={fmtInput(a.amount)}
+                  onChange={(e) => { const n = parseAmount(e.target.value); patchOne(i, { amount: n === null ? 0 : n }); }} />
+              </div>
+              <Button type="button" variant="ghost" size="icon" aria-label={`Remove adjustment ${i + 1}`}
+                onClick={() => removeOne(i)} className="shrink-0 self-end">
+                <Trash2 />
+              </Button>
             </div>
-            <div>
-              <Label htmlFor={`amt-${i}`} className="text-xs">Monthly amount (VND)</Label>
-              <Input id={`amt-${i}`} inputMode="numeric" className="mt-1 w-44 tabular" value={fmtInput(a.amount)}
-                onChange={(e) => { const n = parseAmount(e.target.value); patchOne(i, { amount: n === null ? 0 : n }); }} />
-            </div>
-            <p className="text-xs text-muted-foreground">{adjustmentHints[a.kind]}</p>
-            <Button type="button" variant="ghost" size="icon" aria-label={`Remove adjustment ${i + 1}`}
-              onClick={() => removeOne(i)}>
-              <Trash2 />
-            </Button>
+            <p className="mt-2 text-xs text-muted-foreground">{adjustmentHints[a.kind]}</p>
           </li>
         ))}
       </ul>
@@ -164,7 +168,7 @@ function ExperimentPanel({ profile, scenario }: { profile: FinancialProfile; sce
           <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-label="Before vs after comparison">
             <ComparisonCard label="Risk level"
               before={cmp.baseline.risk.level} after={cmp.adjusted.risk.level}
-              improved={cmp.riskImproved} />
+              improved={cmp.riskImproved} riskCard />
             <ComparisonCard label="Lowest balance"
               before={formatVND(cmp.baseline.lowestBalance)} after={formatVND(cmp.adjusted.lowestBalance)}
               delta={cmp.deltaLowestBalance} />
@@ -192,30 +196,37 @@ function ExperimentPanel({ profile, scenario }: { profile: FinancialProfile; sce
   );
 }
 
-function ComparisonCard({ label, before, after, delta, improved, lowerIsBetter }: {
+const riskTone: Record<RiskLevel, string> = {
+  Low: "text-teal",
+  Medium: "text-warning",
+  High: "text-negative",
+};
+
+function ComparisonCard({ label, before, after, delta, improved, lowerIsBetter, riskCard }: {
   label: string;
   before: string;
   after: string;
   delta?: number;
   improved?: boolean;
   lowerIsBetter?: boolean;
+  riskCard?: boolean;
 }) {
   const showDelta = delta !== undefined && delta !== 0;
   const deltaGood = lowerIsBetter ? delta! < 0 : delta! > 0;
   return (
     <div className="rounded-lg border bg-background p-4">
       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <div className="mt-3 space-y-1.5 text-sm">
-        <div className="flex items-center justify-between">
-          <span className="text-muted-foreground">Before</span>
-          <span className="tabular font-medium">{before}</span>
+      <div className="mt-3 space-y-2 text-sm">
+        <div className="flex items-center justify-between rounded-md bg-secondary/60 px-3 py-2">
+          <span className="text-xs text-muted-foreground">Before</span>
+          <span className={cn("tabular font-medium", riskCard && riskTone[before as RiskLevel])}>{before}</span>
         </div>
-        <div className="flex items-center justify-between">
-          <span className="text-muted-foreground">After</span>
-          <span className={cn("tabular font-medium", showDelta && (deltaGood ? "text-teal" : "text-negative"))}>{after}</span>
+        <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+          <span className="text-xs text-muted-foreground">After</span>
+          <span className={cn("tabular font-medium", riskCard && riskTone[after as RiskLevel])}>{after}</span>
         </div>
         {showDelta && (
-          <div className="flex items-center justify-between border-t pt-1.5">
+          <div className="flex items-center justify-between border-t pt-2">
             <span className="text-xs text-muted-foreground">Change</span>
             <span className={cn("flex items-center gap-1 text-xs font-medium tabular", deltaGood ? "text-teal" : "text-negative")}>
               {deltaGood ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
