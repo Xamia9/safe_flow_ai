@@ -40,6 +40,21 @@ type KeyInfo = {
   isValid: boolean;
 };
 
+/**
+ * Safe server-side diagnostic logging.
+ * Records the error category, HTTP status, and provider code — never credentials.
+ */
+function logDiagnostic(
+  category: string,
+  details: { httpStatus?: number; providerCode?: string | number; keyIndex?: number },
+): void {
+  const parts = [`[Gemini] ${category}`];
+  if (details.httpStatus !== undefined) parts.push(`HTTP ${details.httpStatus}`);
+  if (details.providerCode !== undefined) parts.push(`providerCode=${details.providerCode}`);
+  if (details.keyIndex !== undefined) parts.push(`keyIndex=${details.keyIndex}`);
+  console.error(parts.join(" | "));
+}
+
 class GeminiKeyManager {
   private keys: KeyState[] = [];
   private nextIndex = 0;
@@ -120,30 +135,44 @@ class GeminiKeyManager {
   }
 
   /**
-   * Determine whether an error is eligible for key fallback.
+   * Classify an error into an actionable category for safe reporting.
    *
-   * - 400, 401, 403 → invalid/revoked key → eligible for fallback
-   * - 429 → quota/rate limit → NOT eligible (respect Google's terms)
-   * - 500, 503 → transient server error → eligible for fallback (retry with same or different key)
-   * - Network/timeout errors → eligible for fallback
+   * - 400, 401, 403 → invalid_key (invalid/revoked key → eligible for fallback)
+   * - 404 → model_unavailable (model name not found → NOT eligible, same model for all keys)
+   * - 429 → rate_limited (quota/rate limit → NOT eligible, respect Google's terms)
+   * - 500, 503 → server_error (transient → eligible for fallback)
+   * - AbortError / network → timeout (eligible for fallback)
+   * - Unknown → unknown (eligible for fallback)
    *
-   * Returns { eligible, shouldMarkInvalid }.
+   * Returns the category, whether key fallback is eligible, and whether
+   * the current key should be marked invalid.
    */
-  private classifyError(error: unknown): { eligible: boolean; shouldMarkInvalid: boolean } {
+  private classifyError(error: unknown): {
+    category: GeminiErrorCode;
+    eligible: boolean;
+    shouldMarkInvalid: boolean;
+  } {
     const status = extractStatus(error);
+    const providerCode = extractProviderCode(error);
+    const isAbort = isAbortError(error);
 
     if (status === 400 || status === 401 || status === 403) {
-      return { eligible: true, shouldMarkInvalid: true };
+      return { category: "invalid_key", eligible: true, shouldMarkInvalid: true };
+    }
+    if (status === 404) {
+      return { category: "model_unavailable", eligible: false, shouldMarkInvalid: false };
     }
     if (status === 429) {
-      // Quota / rate limit — do NOT rotate keys to bypass
-      return { eligible: false, shouldMarkInvalid: false };
+      return { category: "rate_limited", eligible: false, shouldMarkInvalid: false };
     }
     if (status === 500 || status === 503) {
-      return { eligible: true, shouldMarkInvalid: false };
+      return { category: "server_error", eligible: true, shouldMarkInvalid: false };
     }
-    // Network errors, timeouts, unknown errors — eligible, don't mark invalid
-    return { eligible: true, shouldMarkInvalid: false };
+    if (isAbort) {
+      return { category: "timeout", eligible: true, shouldMarkInvalid: false };
+    }
+    // Network errors or unknown errors
+    return { category: "unknown_error", eligible: true, shouldMarkInvalid: false };
   }
 
   /**
@@ -178,12 +207,14 @@ class GeminiKeyManager {
       11,
     );
 
-    let lastError: unknown = null;
+    let lastCategory: GeminiErrorCode = "unknown_error";
+    let lastHttpStatus: number | undefined;
+    let lastProviderCode: string | number | undefined;
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const keyState = this.selectKey();
       if (!keyState) {
-        // All keys are on cooldown
+        logDiagnostic("all_keys_unavailable", {});
         throw new SafeGeminiError(
           "all_keys_unavailable",
           "All configured API keys are temporarily unavailable. Please try again later.",
@@ -194,18 +225,31 @@ class GeminiKeyManager {
         const response = await this.callGemini(keyState.apiKey, model, prompt, timeoutMs, options?.maxOutputTokens);
         return response;
       } catch (error) {
-        lastError = error;
-        const { eligible, shouldMarkInvalid } = this.classifyError(error);
+        const { category, eligible, shouldMarkInvalid } = this.classifyError(error);
+        const httpStatus = extractStatus(error) || undefined;
+        const providerCode = extractProviderCode(error) || undefined;
+
+        lastCategory = category;
+        lastHttpStatus = httpStatus;
+        lastProviderCode = providerCode;
+
+        logDiagnostic(category, {
+          ...(httpStatus !== undefined && { httpStatus }),
+          ...(providerCode !== undefined && { providerCode }),
+          keyIndex: attempt,
+        });
 
         if (shouldMarkInvalid) {
           this.markInvalid(keyState);
         }
 
         if (!eligible) {
-          // Quota/rate-limit — don't try other keys
+          // Quota/rate-limit or model unavailable — don't try other keys
           throw new SafeGeminiError(
-            "rate_limited",
-            "The AI service is currently rate-limited. Please try again in a few moments.",
+            category,
+            friendlyMessage(category),
+            ...(httpStatus !== undefined ? [httpStatus] : []),
+            ...(providerCode !== undefined ? [providerCode] : []),
           );
         }
         // Continue to next attempt (next key)
@@ -214,8 +258,10 @@ class GeminiKeyManager {
 
     // All attempts exhausted
     throw new SafeGeminiError(
-      "service_error",
-      "The AI service could not be reached after multiple attempts. Please try again later.",
+      lastCategory,
+      friendlyMessage(lastCategory),
+      ...(lastHttpStatus !== undefined ? [lastHttpStatus] : []),
+      ...(lastProviderCode !== undefined ? [lastProviderCode] : []),
     );
   }
 
@@ -262,24 +308,63 @@ export function getGeminiKeyManager(): GeminiKeyManager {
 
 /**
  * Error class that never exposes API keys, raw provider errors, or sensitive
- * diagnostics to clients. Only a safe type and user-friendly message are included.
+ * diagnostics to clients. Only a safe category, user-friendly message, and
+ * optional HTTP status / provider error code are included.
  */
 export class SafeGeminiError extends Error {
   readonly code: GeminiErrorCode;
+  readonly httpStatus?: number;
+  readonly providerCode?: string | number;
 
-  constructor(code: GeminiErrorCode, message: string) {
+  constructor(
+    code: GeminiErrorCode,
+    message: string,
+    httpStatus?: number,
+    providerCode?: string | number,
+  ) {
     super(message);
     this.name = "SafeGeminiError";
     this.code = code;
+    if (httpStatus !== undefined) this.httpStatus = httpStatus;
+    if (providerCode !== undefined) this.providerCode = providerCode;
   }
 }
 
 export type GeminiErrorCode =
   | "no_keys"
   | "all_keys_unavailable"
+  | "invalid_key"
+  | "model_unavailable"
   | "rate_limited"
-  | "service_error"
+  | "server_error"
+  | "timeout"
+  | "unknown_error"
   | "invalid_response";
+
+/**
+ * User-friendly message for each error category.
+ * Never includes raw provider error text or credentials.
+ */
+function friendlyMessage(code: GeminiErrorCode): string {
+  switch (code) {
+    case "invalid_key":
+      return "The configured API key is invalid or revoked. Please check your Gemini API key configuration.";
+    case "model_unavailable":
+      return "The requested Gemini model is not available. Check the GEMINI_MODEL setting or use a different model.";
+    case "rate_limited":
+      return "The AI service is currently rate-limited. Please try again in a few moments.";
+    case "server_error":
+      return "The Gemini service returned a server error. Please try again later.";
+    case "timeout":
+      return "The request to the Gemini API timed out. Please try again.";
+    case "all_keys_unavailable":
+      return "All configured API keys are temporarily unavailable. Please try again later.";
+    case "unknown_error":
+      return "An unexpected error occurred while contacting the Gemini API. Please try again later.";
+    default:
+      return "The AI service could not be reached. Please try again later.";
+  }
+}
 
 /**
  * Extract HTTP status code from various error shapes.
@@ -294,12 +379,47 @@ function extractStatus(error: unknown): number {
     if (typeof e["code"] === "number") return e["code"];
     // @google/genAI errors may nest status
     const error2 = e["error"] as Record<string, unknown> | undefined;
-    if (error2 && typeof error2 === "object") {
+    if (error2 && typeof error2["object"]) {
       if (typeof error2["status"] === "number") return error2["status"];
+      if (typeof error2["statusCode"] === "number") return error2["statusCode"];
       if (typeof error2["code"] === "number") return error2["code"];
     }
   }
   return 0;
+}
+
+/**
+ * Extract a provider-specific error code from Google API error shapes.
+ * Google APIs typically return: { error: { code: 400, status: "INVALID_ARGUMENT", message: "..." } }
+ * Returns undefined if no provider code could be determined.
+ */
+function extractProviderCode(error: unknown): string | number | undefined {
+  if (error == null || typeof error !== "object") return undefined;
+  const e = error as Record<string, unknown>;
+
+  // Check for Google API error envelope: { error: { status: "..." } }
+  const nested = e["error"] as Record<string, unknown> | undefined;
+  if (nested && typeof nested === "object") {
+    if (typeof nested["status"] === "string") return nested["status"];
+    if (typeof nested["code"] === "number") return nested["code"];
+  }
+
+  // Some errors put status directly on the error object
+  if (typeof e["status"] === "string") return e["status"];
+  if (typeof e["code"] === "string") return e["code"];
+
+  return undefined;
+}
+
+/**
+ * Check whether an error is an AbortError (from AbortController timeout).
+ */
+function isAbortError(error: unknown): boolean {
+  if (error == null || typeof error !== "object") return false;
+  const e = error as Record<string, unknown>;
+  if (e["name"] === "AbortError") return true;
+  if (typeof e["message"] === "string" && e["message"].includes("aborted")) return true;
+  return false;
 }
 
 /**

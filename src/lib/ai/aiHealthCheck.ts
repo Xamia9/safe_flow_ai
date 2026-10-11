@@ -3,8 +3,12 @@ import { createServerFn } from "@tanstack/react-start";
 type GeminiErrorCode =
   | "no_keys"
   | "all_keys_unavailable"
+  | "invalid_key"
+  | "model_unavailable"
   | "rate_limited"
-  | "service_error"
+  | "server_error"
+  | "timeout"
+  | "unknown_error"
   | "invalid_response";
 
 /**
@@ -12,6 +16,8 @@ type GeminiErrorCode =
  * using a fixed, harmless test prompt. Never accepts arbitrary prompts from clients.
  *
  * Returns only minimal success/error information — no keys, raw errors, or sensitive diagnostics.
+ * When an error occurs, the response includes a sanitized code, user-friendly message,
+ * and (if available) the HTTP status and provider error code for actionable diagnostics.
  *
  * The Gemini key manager and @google/genai SDK are loaded via dynamic import
  * inside the handler so they never enter the client bundle.
@@ -24,6 +30,8 @@ export type HealthCheckResult = {
   message: string;
   code?: GeminiErrorCode;
   elapsedMs?: number;
+  httpStatus?: number;
+  providerCode?: string | number;
 };
 
 export const aiHealthCheck = createServerFn({ method: "POST" }).handler(
@@ -75,13 +83,15 @@ export const aiHealthCheck = createServerFn({ method: "POST" }).handler(
           message: error.message,
           code: error.code,
           elapsedMs,
+          ...(error.httpStatus !== undefined && { httpStatus: error.httpStatus }),
+          ...(error.providerCode !== undefined && { providerCode: error.providerCode }),
         };
       }
 
       return {
         ok: false,
-        message: "The AI service could not be reached. Please try again later.",
-        code: "service_error",
+        message: "An unexpected error occurred while contacting the Gemini API. Please try again later.",
+        code: "unknown_error",
         elapsedMs,
       };
     }

@@ -42,6 +42,7 @@ beforeEach(() => {
   }
   mockGenerateContent.mockReset();
   getGeminiKeyManager().reset();
+  vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
 afterEach(() => {
@@ -53,6 +54,7 @@ afterEach(() => {
     }
   }
   getGeminiKeyManager().reset();
+  vi.restoreAllMocks();
 });
 
 function setKeys(...keys: string[]) {
@@ -71,8 +73,25 @@ function mockError(status: number, message = "API error") {
   mockGenerateContent.mockRejectedValue(error);
 }
 
+/** Mock a Google API error with nested envelope: { error: { code, status, message } } */
+function mockGoogleError(status: number, providerStatus: string, message = "API error") {
+  const error = new Error(message) as Error & {
+    status: number;
+    error: { code: number; status: string; message: string };
+  };
+  error.status = status;
+  error.error = { code: status, status: providerStatus, message };
+  mockGenerateContent.mockRejectedValue(error);
+}
+
 function mockNetworkError() {
   mockGenerateContent.mockRejectedValue(new Error("fetch failed"));
+}
+
+function mockAbortError() {
+  const error = new Error("The operation was aborted") as Error & { name: string };
+  error.name = "AbortError";
+  mockGenerateContent.mockRejectedValue(error);
 }
 
 describe("GeminiKeyManager — key loading", () => {
@@ -208,14 +227,14 @@ describe("GeminiKeyManager — invalid key fallback", () => {
     expect(mockGenerateContent).toHaveBeenCalledTimes(3);
   });
 
-  it("throws when all keys are invalid", async () => {
+  it("throws invalid_key when all keys return 401", async () => {
     setKeys("bad-1", "bad-2");
     mockGenerateContent
       .mockRejectedValueOnce(Object.assign(new Error("401"), { status: 401 }))
       .mockRejectedValueOnce(Object.assign(new Error("401"), { status: 401 }));
 
     await expect(getGeminiKeyManager().generateContent("test"))
-      .rejects.toMatchObject({ code: "service_error" });
+      .rejects.toMatchObject({ code: "invalid_key" });
   });
 });
 
@@ -251,6 +270,27 @@ describe("GeminiKeyManager — quota / rate limit (429)", () => {
   });
 });
 
+describe("GeminiKeyManager — model unavailable (404)", () => {
+  it("returns model_unavailable on 404 and does not fall back", async () => {
+    setKeys("key-1", "key-2");
+    mockError(404, "Model not found");
+
+    await expect(getGeminiKeyManager().generateContent("test"))
+      .rejects.toMatchObject({ code: "model_unavailable" });
+    expect(mockGenerateContent).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not mark key invalid for 404", async () => {
+    setKeys("key-1");
+    mockError(404);
+    await expect(getGeminiKeyManager().generateContent("test"))
+      .rejects.toMatchObject({ code: "model_unavailable" });
+
+    const info = getGeminiKeyManager().getKeyInfo();
+    expect(info[0]!.isValid).toBe(true);
+  });
+});
+
 describe("GeminiKeyManager — transient errors", () => {
   it("falls back on 500 server error", async () => {
     setKeys("key-1", "key-2");
@@ -272,10 +312,11 @@ describe("GeminiKeyManager — transient errors", () => {
     expect(response.text).toBe("OK from key 2");
   });
 
-  it("does not mark key invalid for 500", async () => {
+  it("returns server_error when all keys return 500", async () => {
     setKeys("key-1");
     mockError(500);
-    await expect(getGeminiKeyManager().generateContent("test")).rejects.toMatchObject({ code: "service_error" });
+    await expect(getGeminiKeyManager().generateContent("test"))
+      .rejects.toMatchObject({ code: "server_error" });
 
     const info = getGeminiKeyManager().getKeyInfo();
     expect(info[0]!.isValid).toBe(true);
@@ -293,20 +334,30 @@ describe("GeminiKeyManager — transient errors", () => {
 
   it("falls back on timeout/abort error", async () => {
     setKeys("key-1", "key-2");
-    const abortErr = new Error("aborted") as Error & { name: string };
-    abortErr.name = "AbortError";
+    mockAbortError();
     mockGenerateContent
-      .mockRejectedValueOnce(abortErr)
+      .mockRejectedValueOnce(Object.assign(new Error("aborted"), { name: "AbortError" }))
       .mockResolvedValueOnce({ text: "OK from key 2" });
 
     const response = await getGeminiKeyManager().generateContent("test", { timeoutMs: 100 });
     expect(response.text).toBe("OK from key 2");
   });
 
+  it("returns timeout when all keys time out", async () => {
+    setKeys("key-1");
+    mockAbortError();
+    await expect(getGeminiKeyManager().generateContent("test"))
+      .rejects.toMatchObject({ code: "timeout" });
+
+    const info = getGeminiKeyManager().getKeyInfo();
+    expect(info[0]!.isValid).toBe(true);
+  });
+
   it("does not mark key invalid for network error", async () => {
     setKeys("key-1");
     mockNetworkError();
-    await expect(getGeminiKeyManager().generateContent("test")).rejects.toMatchObject({ code: "service_error" });
+    await expect(getGeminiKeyManager().generateContent("test"))
+      .rejects.toMatchObject({ code: "unknown_error" });
 
     const info = getGeminiKeyManager().getKeyInfo();
     expect(info[0]!.isValid).toBe(true);
@@ -318,7 +369,7 @@ describe("GeminiKeyManager — bounded retries", () => {
     setKeys("key-1", "key-2");
     mockNetworkError();
     await expect(getGeminiKeyManager().generateContent("test"))
-      .rejects.toMatchObject({ code: "service_error" });
+      .rejects.toMatchObject({ code: "unknown_error" });
     expect(mockGenerateContent).toHaveBeenCalledTimes(2);
   });
 
@@ -326,7 +377,7 @@ describe("GeminiKeyManager — bounded retries", () => {
     setKeys("key-1", "key-2", "key-3");
     mockNetworkError();
     await expect(getGeminiKeyManager().generateContent("test", { maxAttempts: 1 }))
-      .rejects.toMatchObject({ code: "service_error" });
+      .rejects.toMatchObject({ code: "unknown_error" });
     expect(mockGenerateContent).toHaveBeenCalledTimes(1);
   });
 
@@ -334,8 +385,91 @@ describe("GeminiKeyManager — bounded retries", () => {
     setKeys("k1", "k2", "k3", "k4", "k5", "k6", "k7", "k8", "k9", "k10", "k11", "k12", "k13");
     mockNetworkError();
     await expect(getGeminiKeyManager().generateContent("test"))
-      .rejects.toMatchObject({ code: "service_error" });
+      .rejects.toMatchObject({ code: "unknown_error" });
     expect(mockGenerateContent).toHaveBeenCalledTimes(11);
+  });
+});
+
+describe("GeminiKeyManager — error enrichment", () => {
+  it("includes httpStatus on SafeGeminiError for 401", async () => {
+    setKeys("bad-key");
+    mockError(401, "API key not valid");
+    try {
+      await getGeminiKeyManager().generateContent("test");
+      expect.fail("should throw");
+    } catch (e) {
+      const safe = e as SafeGeminiError;
+      expect(safe.code).toBe("invalid_key");
+      expect(safe.httpStatus).toBe(401);
+    }
+  });
+
+  it("includes httpStatus on SafeGeminiError for 429", async () => {
+    setKeys("key-1");
+    mockError(429, "Quota exceeded");
+    try {
+      await getGeminiKeyManager().generateContent("test");
+      expect.fail("should throw");
+    } catch (e) {
+      const safe = e as SafeGeminiError;
+      expect(safe.code).toBe("rate_limited");
+      expect(safe.httpStatus).toBe(429);
+    }
+  });
+
+  it("includes providerCode from Google API error envelope", async () => {
+    setKeys("key-1");
+    mockGoogleError(404, "NOT_FOUND", "Model not found");
+    try {
+      await getGeminiKeyManager().generateContent("test");
+      expect.fail("should throw");
+    } catch (e) {
+      const safe = e as SafeGeminiError;
+      expect(safe.code).toBe("model_unavailable");
+      expect(safe.httpStatus).toBe(404);
+      expect(safe.providerCode).toBe("NOT_FOUND");
+    }
+  });
+
+  it("includes providerCode for INVALID_ARGUMENT (400)", async () => {
+    setKeys("bad-key", "bad-key-2");
+    mockGoogleError(400, "INVALID_ARGUMENT", "Bad request");
+    try {
+      await getGeminiKeyManager().generateContent("test");
+      expect.fail("should throw");
+    } catch (e) {
+      const safe = e as SafeGeminiError;
+      expect(safe.code).toBe("invalid_key");
+      expect(safe.httpStatus).toBe(400);
+      expect(safe.providerCode).toBe("INVALID_ARGUMENT");
+    }
+  });
+
+  it("does not include httpStatus for network errors", async () => {
+    setKeys("key-1");
+    mockNetworkError();
+    try {
+      await getGeminiKeyManager().generateContent("test");
+      expect.fail("should throw");
+    } catch (e) {
+      const safe = e as SafeGeminiError;
+      expect(safe.code).toBe("unknown_error");
+      expect(safe.httpStatus).toBeUndefined();
+      expect(safe.providerCode).toBeUndefined();
+    }
+  });
+
+  it("does not include httpStatus for timeout/abort errors", async () => {
+    setKeys("key-1");
+    mockAbortError();
+    try {
+      await getGeminiKeyManager().generateContent("test");
+      expect.fail("should throw");
+    } catch (e) {
+      const safe = e as SafeGeminiError;
+      expect(safe.code).toBe("timeout");
+      expect(safe.httpStatus).toBeUndefined();
+    }
   });
 });
 
@@ -353,9 +487,9 @@ describe("GeminiKeyManager — safe error responses", () => {
     }
   });
 
-  it("SafeGeminiError message is user-friendly", async () => {
+  it("SafeGeminiError message is user-friendly and does not leak raw provider text", async () => {
     setKeys("key-1");
-    mockError(500, "Internal server error with sensitive stack trace data");
+    mockGoogleError(500, "INTERNAL", "Internal server error with sensitive stack trace data");
     try {
       await getGeminiKeyManager().generateContent("test");
       expect.fail("should throw");
@@ -364,6 +498,20 @@ describe("GeminiKeyManager — safe error responses", () => {
       expect(safe.message).not.toContain("Internal server error");
       expect(safe.message).not.toContain("stack trace");
     }
+  });
+
+  it("logs diagnostic category and status to console.error but never keys", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    setKeys("SECRET-KEY-99999");
+    mockGoogleError(401, "UNAUTHENTICATED", "API key not valid");
+    await expect(getGeminiKeyManager().generateContent("test"))
+      .rejects.toMatchObject({ code: "invalid_key" });
+
+    const loggedText = errorSpy.mock.calls.map((c) => String(c)).join("\n");
+    expect(loggedText).toContain("invalid_key");
+    expect(loggedText).toContain("401");
+    expect(loggedText).not.toContain("SECRET-KEY-99999");
+    errorSpy.mockRestore();
   });
 });
 
@@ -376,7 +524,7 @@ describe("GeminiKeyManager — all keys on cooldown", () => {
 
     // First call exhausts both keys with 401, marking them invalid
     await expect(getGeminiKeyManager().generateContent("test"))
-      .rejects.toMatchObject({ code: "service_error" });
+      .rejects.toMatchObject({ code: "invalid_key" });
 
     // Second call: both keys are on cooldown
     mockSuccess("OK");

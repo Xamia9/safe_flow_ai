@@ -22,17 +22,21 @@ function AiStatusPage() {
   const timer = useAiTimer();
 
   const runCheck = async () => {
-    if (timer.status === "loading") return; // prevent duplicate submissions
+    if (timer.status === "loading") return;
     timer.start();
     try {
       const res = await aiHealthCheck();
       setResult(res);
-      timer.succeed();
+      if (res.ok) {
+        timer.succeed();
+      } else {
+        timer.fail();
+      }
     } catch {
       setResult({
         ok: false,
         message: "An unexpected error occurred while contacting the AI service.",
-        code: "service_error",
+        code: "unknown_error",
       });
       timer.fail();
     }
@@ -80,17 +84,26 @@ function AiStatusPage() {
           />
         </div>
 
-        {result && timer.status === "done" && (
+        {result && (timer.status === "done" || timer.status === "error") && (
           <div className="mt-4 rounded-lg border bg-background p-4 text-sm">
             <p className="font-medium">
               Status: {result.ok ? "Connected" : "Unavailable"}
             </p>
             <p className="mt-1 text-muted-foreground">{result.message}</p>
-            {result.elapsedMs !== undefined && (
-              <p className="mt-1 font-mono text-xs text-muted-foreground tabular">
-                Response time: {result.elapsedMs}ms
-              </p>
-            )}
+            <div className="mt-2 space-y-1 font-mono text-xs text-muted-foreground tabular">
+              {result.code && (
+                <p>Error code: {result.code}</p>
+              )}
+              {result.httpStatus !== undefined && (
+                <p>HTTP status: {result.httpStatus}</p>
+              )}
+              {result.providerCode !== undefined && (
+                <p>Provider code: {String(result.providerCode)}</p>
+              )}
+              {result.elapsedMs !== undefined && (
+                <p>Response time: {result.elapsedMs}ms</p>
+              )}
+            </div>
           </div>
         )}
       </section>
