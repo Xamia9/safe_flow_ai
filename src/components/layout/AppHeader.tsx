@@ -12,7 +12,7 @@ const nav = [
 export function AppHeader() {
   const [open, setOpen] = useState(false);
   return (
-    <header className="sticky top-0 z-40 border-b border-white/10 bg-[var(--background)]/85 backdrop-blur supports-[backdrop-filter]:bg-[var(--background)]/70">
+    <header className="sticky top-0 z-40 border-b border-white/15 bg-[var(--background)]/80 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
         <Link to="/" className="flex items-center gap-2 font-display text-lg font-bold text-foreground">
           <span className="grid h-8 w-8 place-items-center rounded-lg bg-teal text-navy">
@@ -26,7 +26,7 @@ export function AppHeader() {
               key={n.to}
               to={n.to}
               activeOptions={{ exact: true }}
-              className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-white/10 hover:text-foreground"
+              className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
               activeProps={{ className: "bg-white/15 text-foreground" }}
             >
               {n.label}
@@ -34,7 +34,7 @@ export function AppHeader() {
           ))}
         </nav>
         <button
-          className="rounded-md p-2 text-foreground md:hidden"
+          className="rounded-md p-2 text-foreground transition-colors hover:bg-white/10 md:hidden"
           aria-label={open ? "Close menu" : "Open menu"}
           aria-expanded={open}
           onClick={() => setOpen(!open)}
@@ -43,13 +43,13 @@ export function AppHeader() {
         </button>
       </div>
       {open && (
-        <nav aria-label="Mobile" className="border-t border-white/10 px-4 py-2 md:hidden">
+        <nav aria-label="Mobile" className="border-t border-white/15 px-4 py-2 md:hidden">
           {nav.map((n) => (
             <Link
               key={n.to}
               to={n.to}
               onClick={() => setOpen(false)}
-              className="block rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-white/10 hover:text-foreground"
+              className="block rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
               activeOptions={{ exact: true }}
               activeProps={{ className: "bg-white/15 text-foreground" }}
             >

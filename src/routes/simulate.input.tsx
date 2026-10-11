@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { parseAmount, parseProfileDraft, validateScenario, type Errors } from "@/lib/validation";
+import { formatWithCaret } from "@/lib/formatInput";
 import { buildPreset, presetMeta, suggestedReduction } from "@/lib/scenarioPresets";
 import { setDuration, setHorizon, usesReduction } from "@/lib/scenarioUpdates";
 import { compareScenarios } from "@/lib/financialCalculations";
@@ -215,7 +216,7 @@ function InputPage() {
                 <div>
                   <Label htmlFor={`a${i}`} className="text-xs">Amount (VND)</Label>
                   <Input id={`a${i}`} inputMode="numeric" className="mt-1 w-44 tabular" value={fmt(x.amount)}
-                    onChange={(e) => { const n = parseAmount(e.target.value); updateExp(i, { amount: n === null ? 0 : n }); }}
+                    onChange={(e) => { const formatted = formatWithCaret(e.target.value, e.target); const n = parseAmount(formatted); updateExp(i, { amount: n === null ? 0 : n }); }}
                     aria-invalid={!!errors[`unexpected.${i}.amount`]} />
                 </div>
                 <Button type="button" variant="ghost" size="icon" aria-label={`Remove expense ${i + 1}`}

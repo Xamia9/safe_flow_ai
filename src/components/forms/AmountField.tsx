@@ -1,11 +1,16 @@
+import { type ChangeEvent } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { parseAmount } from "@/lib/validation";
+import { formatWithCaret } from "@/lib/formatInput";
 
 export function AmountField({ id, label, hint, value, onChange, error, optional }: {
   id: string; label: string; hint?: string | undefined; value: string;
   onChange: (v: string) => void; error?: string | undefined; optional?: boolean;
 }) {
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
+    onChange(formatWithCaret(e.target.value, e.target));
+  };
   return (
     <div className="space-y-1.5">
       <Label htmlFor={id}>
@@ -16,19 +21,7 @@ export function AmountField({ id, label, hint, value, onChange, error, optional 
           id={id}
           inputMode="numeric"
           value={value}
-          onChange={(e) => {
-            const raw = e.target.value;
-            const n = parseAmount(raw);
-            if (n === null) {
-              onChange(raw === "" ? "" : raw.replace(/[^\d]/g, ""));
-              return;
-            }
-            if (Number.isNaN(n)) {
-              onChange(raw.replace(/[^\d]/g, ""));
-              return;
-            }
-            onChange(n.toLocaleString("en-US"));
-          }}
+          onChange={handleChange}
           onBlur={(e) => {
             const n = parseAmount(e.target.value);
             if (n !== null && !Number.isNaN(n)) {

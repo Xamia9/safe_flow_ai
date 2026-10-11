@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { simulate } from "@/lib/financialCalculations";
 import { formatVND } from "@/lib/formatCurrency";
 import { parseAmount } from "@/lib/validation";
+import { formatWithCaret } from "@/lib/formatInput";
 import { useSimulation } from "@/services/simulationStore";
 import { describeScenario } from "@/lib/scenarioUpdates";
 import { cn } from "@/lib/utils";
@@ -141,7 +142,7 @@ function ExperimentPanel({ profile, scenario }: { profile: FinancialProfile; sce
               <div className="sm:w-48">
                 <Label htmlFor={`amt-${i}`} className="text-xs">Monthly amount (VND)</Label>
                 <Input id={`amt-${i}`} inputMode="numeric" className="mt-1 w-full tabular" value={fmtInput(a.amount)}
-                  onChange={(e) => { const n = parseAmount(e.target.value); patchOne(i, { amount: n === null ? 0 : n }); }} />
+                  onChange={(e) => { const formatted = formatWithCaret(e.target.value, e.target); const n = parseAmount(formatted); patchOne(i, { amount: n === null ? 0 : n }); }} />
               </div>
               <Button type="button" variant="ghost" size="icon" aria-label={`Remove adjustment ${i + 1}`}
                 onClick={() => removeOne(i)} className="shrink-0 self-end">
