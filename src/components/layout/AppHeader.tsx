@@ -12,10 +12,10 @@ const nav = [
 export function AppHeader() {
   const [open, setOpen] = useState(false);
   return (
-    <header className="sticky top-0 z-40 border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
+    <header className="sticky top-0 z-40 border-b border-white/10 bg-[var(--background)]/85 backdrop-blur supports-[backdrop-filter]:bg-[var(--background)]/70">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-        <Link to="/" className="flex items-center gap-2 font-display text-lg font-bold text-primary">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-navy text-navy-foreground">
+        <Link to="/" className="flex items-center gap-2 font-display text-lg font-bold text-foreground">
+          <span className="grid h-8 w-8 place-items-center rounded-lg bg-teal text-navy">
             <ShieldCheck className="h-4 w-4" aria-hidden />
           </span>
           SafeFlow <span className="text-teal">AI</span>
@@ -26,15 +26,15 @@ export function AppHeader() {
               key={n.to}
               to={n.to}
               activeOptions={{ exact: true }}
-              className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
-              activeProps={{ className: "bg-secondary text-foreground" }}
+              className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-white/10 hover:text-foreground"
+              activeProps={{ className: "bg-white/15 text-foreground" }}
             >
               {n.label}
             </Link>
           ))}
         </nav>
         <button
-          className="rounded-md p-2 md:hidden"
+          className="rounded-md p-2 text-foreground md:hidden"
           aria-label={open ? "Close menu" : "Open menu"}
           aria-expanded={open}
           onClick={() => setOpen(!open)}
@@ -43,15 +43,15 @@ export function AppHeader() {
         </button>
       </div>
       {open && (
-        <nav aria-label="Mobile" className="border-t px-4 py-2 md:hidden">
+        <nav aria-label="Mobile" className="border-t border-white/10 px-4 py-2 md:hidden">
           {nav.map((n) => (
             <Link
               key={n.to}
               to={n.to}
               onClick={() => setOpen(false)}
-              className="block rounded-md px-3 py-2 text-sm font-medium"
+              className="block rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-white/10 hover:text-foreground"
               activeOptions={{ exact: true }}
-              activeProps={{ className: "bg-secondary" }}
+              activeProps={{ className: "bg-white/15 text-foreground" }}
             >
               {n.label}
             </Link>

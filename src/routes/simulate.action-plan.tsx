@@ -214,7 +214,7 @@ function ComparisonCard({ label, before, after, delta, improved, lowerIsBetter, 
   const showDelta = delta !== undefined && delta !== 0;
   const deltaGood = lowerIsBetter ? delta! < 0 : delta! > 0;
   return (
-    <div className="rounded-lg border bg-background p-4">
+    <div className="rounded-lg border border-border bg-secondary/40 p-4">
       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
       <div className="mt-3 space-y-2 text-sm">
         <div className="flex items-center justify-between rounded-md bg-secondary/60 px-3 py-2">

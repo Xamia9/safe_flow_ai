@@ -244,7 +244,7 @@ function InputPage() {
       </section>
 
       {Object.keys(errors).length > 0 && (
-        <p role="alert" className="rounded-lg bg-negative-soft p-3 text-sm text-negative">Please fix the highlighted fields.</p>
+        <p role="alert" className="rounded-lg border border-negative/30 bg-negative-soft p-3 text-sm text-negative">Please fix the highlighted fields.</p>
       )}
       <div className="flex justify-end">
         <Button type="submit" size="lg">Run Simulation</Button>
