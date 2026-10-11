@@ -9,7 +9,7 @@ const tones: Record<Tone, string> = {
 };
 
 export function StatCard({ label, value, hint, tone = "default" }: {
-  label: string; value: string; hint?: string; tone?: Tone;
+  label: string; value: string; hint?: string | undefined; tone?: Tone;
 }) {
   return (
     <div className="rounded-xl border bg-card p-4">
