@@ -577,7 +577,8 @@ function drawRecommendations(doc: jsPDF, y: number, recs: Recommendation[]): num
       y = M;
     }
     y = ensure(doc, y, 20);
-    const cardTop = y;
+    let cardTop = y;
+    const cardPage = doc.getNumberOfPages();
 
     // Title (wrap with room for priority badge)
     doc.setFont("helvetica", "bold");
@@ -672,7 +673,11 @@ function drawRecommendations(doc: jsPDF, y: number, recs: Recommendation[]): num
       }
     }
 
-    // Card border
+    // Card border — if a page break occurred mid-content, reset cardTop to
+    // the top of the current page so the frame covers only what's on this page.
+    if (doc.getNumberOfPages() !== cardPage) {
+      cardTop = M;
+    }
     doc.setDrawColor(...C.border);
     doc.setLineWidth(0.3);
     const cardH = y - cardTop + 3;
