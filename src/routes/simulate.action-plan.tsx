@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { ClipboardList, FileText, Lightbulb, Plus, RotateCcw, Trash2, TrendingUp, TrendingDown } from "lucide-react";
+import { ClipboardList, Download, Lightbulb, Plus, RotateCcw, Trash2, TrendingUp, TrendingDown } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import { RiskBadge } from "@/components/common/RiskBadge";
@@ -33,6 +33,7 @@ import {
   selectRecommendations,
 } from "@/lib/recommendations";
 import type { FinancialProfile, RiskLevel, Scenario } from "@/types/financial";
+import { exportSimulationPdf } from "@/lib/pdfExport";
 
 export const Route = createFileRoute("/simulate/action-plan")({
   head: () => ({
@@ -73,7 +74,8 @@ function ActionPlan() {
   return (
     <div className="space-y-8">
       <PageHeader eyebrow="Step 3" title="Action plan & report"
-        description="Review your results and test how changes could improve your resilience. Projections are estimates, not guarantees." />
+        description="Review your results and test how changes could improve your resilience. Projections are estimates, not guarantees."
+        actions={<Button type="button" onClick={() => exportSimulationPdf(profile, scenario)}><Download /> Export PDF</Button>} />
       <Summary profile={profile} scenario={scenario} />
       <RecommendationPanel
         profile={profile}
@@ -81,10 +83,6 @@ function ActionPlan() {
         onSimulate={simulateAdjustments}
       />
       <ExperimentPanel id="experiment-panel" profile={profile} scenario={scenario} exp={exp} setExp={setExp} />
-      <div className="grid gap-4 md:grid-cols-2">
-        <EmptyState icon={FileText} title="Report export — coming soon"
-          description="Downloading a PDF report is not available yet." />
-      </div>
     </div>
   );
 }
