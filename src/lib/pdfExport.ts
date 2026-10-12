@@ -849,4 +849,3 @@ function legW(doc: jsPDF, label: string): number {
 }
 
 
-export { exportSimulationPdf }
