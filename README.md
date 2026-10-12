@@ -22,3 +22,7 @@ cd <repository-name>
 npm i
 npm run dev
 ```
+
+## Gemini connection (server-only)
+- Secret: `GEMINI_API_KEY`, set in Lovable → Project Settings → Secrets (never in code or .env).
+- Server functions: `testGeminiConnection` (fixed harmless prompt) and `generateText` (validated prompt, ≤2000 chars) in `src/lib/gemini.functions.ts`. Model `gemini-2.5-flash`, 15s timeout; returns `{status, text}` or `{status, message}` only.
