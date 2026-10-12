@@ -559,63 +559,78 @@ function drawRecommendations(doc: jsPDF, y: number, recs: Recommendation[]): num
     return y + 4;
   }
 
-  for (const rec of recs) {
+  // Indent for recommendation content — extra padding from page margins
+  const RX = M + 3;          // left edge of rec content
+  const RW = CW - 6;          // writable width inside rec card
+  const BW = RW - 6;          // bullet/numbered text wrap width
+
+  for (let ri = 0; ri < recs.length; ri++) {
+    const rec = recs[ri]!;
     const pc = rec.priority === "High" ? C.rHigh : rec.priority === "Medium" ? C.rMed : C.rLow;
-    y = ensure(doc, y, 30);
+
+    // Estimate total height of this recommendation to decide whether to page-break
+    const estH = estimateRecHeight(doc, rec, RW, BW);
+    const availSpace = PH - M - 10 - y;
+    // If less than 40% of the rec fits on the current page, start fresh
+    if (availSpace < estH * 0.4 && availSpace < 40) {
+      doc.addPage();
+      y = M;
+    }
+    y = ensure(doc, y, 20);
     const cardTop = y;
 
-    // Title
+    // Title (wrap with room for priority badge)
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
+    doc.setFontSize(9.5);
     doc.setTextColor(...C.text);
-    const tl = doc.splitTextToSize(rec.title, CW - 28);
-    doc.text(tl, M, y + 4);
+    const tl = doc.splitTextToSize(rec.title, RW - 26);
+    doc.text(tl, RX, y + 4);
 
     // Priority badge
     const pl = `${rec.priority} priority`;
     const pw = doc.getTextWidth(pl) + 6;
     doc.setFillColor(...pc);
-    doc.roundedRect(M + CW - pw, y + 0.5, pw, 5, 1, 1, "F");
+    doc.roundedRect(M + CW - pw - 2, y + 0.5, pw, 5, 1, 1, "F");
     doc.setFont("helvetica", "bold");
     doc.setFontSize(6.5);
     doc.setTextColor(255, 255, 255);
-    doc.text(pl, M + CW - pw / 2, y + 4, { align: "center" });
+    doc.text(pl, M + CW - pw / 2 - 2, y + 4, { align: "center" });
 
     y += (tl.length as number) * LH + 2;
 
     // Why selected
-    y = subH(doc, "Why this was selected", y);
+    y = subH2(doc, "Why this was selected", y, RX);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.5);
     doc.setTextColor(...C.text);
     for (const reason of rec.triggerReasons) {
       y = ensure(doc, y, LH_S);
-      const rl = doc.splitTextToSize(`- ${reason}`, CW - 4);
-      doc.text(rl, M + 2, y);
+      const rl = doc.splitTextToSize(`\u2022  ${reason}`, BW);
+      doc.text(rl, RX + 3, y);
       y += (rl.length as number) * LH_S;
     }
     y += 2;
 
     // Action steps
-    y = subH(doc, "Action steps", y);
+    y = subH2(doc, "Action steps", y, RX);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.5);
     doc.setTextColor(...C.text);
     rec.actionSteps.forEach((s, i) => {
       y = ensure(doc, y, LH_S);
-      const rl = doc.splitTextToSize(`${i + 1}. ${s.text}`, CW - 6);
-      doc.text(rl, M + 4, y);
+      const rl = doc.splitTextToSize(`${i + 1}.  ${s.text}`, BW);
+      doc.text(rl, RX + 3, y);
       y += (rl.length as number) * LH_S;
     });
     y += 2;
 
     // Expected impact
-    y = subH(doc, "Expected impact", y);
+    y = subH2(doc, "Expected impact", y, RX);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.5);
     doc.setTextColor(...C.text);
-    const il = doc.splitTextToSize(rec.expectedImpact, CW - 4);
-    doc.text(il, M + 2, y);
+    const il = doc.splitTextToSize(rec.expectedImpact, BW);
+    doc.text(il, RX + 3, y);
     y += (il.length as number) * LH_S + 1;
 
     if (rec.impactStatus === "not_quantified") {
@@ -623,20 +638,21 @@ function drawRecommendations(doc: jsPDF, y: number, recs: Recommendation[]): num
       doc.setFont("helvetica", "italic");
       doc.setFontSize(7);
       doc.setTextColor(...C.rMed);
-      doc.text("This impact cannot be quantified by the current simulation engine.", M + 2, y);
-      y += LH_S;
+      const nl = doc.splitTextToSize("This impact cannot be quantified by the current simulation engine.", BW);
+      doc.text(nl, RX + 3, y);
+      y += (nl.length as number) * LH_S;
     }
 
     // Limitations
     if (rec.limitations.length > 0) {
-      y = subH(doc, "Limitations", y);
+      y = subH2(doc, "Limitations", y, RX);
       doc.setFont("helvetica", "normal");
       doc.setFontSize(7);
       doc.setTextColor(...C.muted);
       for (const lim of rec.limitations) {
         y = ensure(doc, y, LH_S);
-        const rl = doc.splitTextToSize(`- ${lim}`, CW - 4);
-        doc.text(rl, M + 2, y);
+        const rl = doc.splitTextToSize(`\u2022  ${lim}`, BW);
+        doc.text(rl, RX + 3, y);
         y += (rl.length as number) * LH_S;
       }
     }
@@ -644,14 +660,14 @@ function drawRecommendations(doc: jsPDF, y: number, recs: Recommendation[]): num
     // Missing info
     if (rec.missingInformation.length > 0) {
       y += 1;
-      y = subH(doc, "Information needed", y);
+      y = subH2(doc, "Information needed", y, RX);
       doc.setFont("helvetica", "normal");
       doc.setFontSize(7);
       doc.setTextColor(...C.muted);
       for (const info of rec.missingInformation) {
         y = ensure(doc, y, LH_S);
-        const rl = doc.splitTextToSize(`- ${info}`, CW - 4);
-        doc.text(rl, M + 2, y);
+        const rl = doc.splitTextToSize(`\u2022  ${info}`, BW);
+        doc.text(rl, RX + 3, y);
         y += (rl.length as number) * LH_S;
       }
     }
@@ -659,7 +675,8 @@ function drawRecommendations(doc: jsPDF, y: number, recs: Recommendation[]): num
     // Card border
     doc.setDrawColor(...C.border);
     doc.setLineWidth(0.3);
-    doc.roundedRect(M - 1, cardTop - 1, CW + 2, y - cardTop + 3, 1, 1, "S");
+    const cardH = y - cardTop + 3;
+    doc.roundedRect(M + 1, cardTop - 1, CW - 2, cardH, 1, 1, "S");
     y += 6;
   }
 
@@ -726,6 +743,59 @@ function subH(doc: jsPDF, text: string, y: number): number {
   return y + LH_S;
 }
 
+function subH2(doc: jsPDF, text: string, y: number, x: number): number {
+  y = ensure(doc, y, LH_S + 1);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.5);
+  doc.setTextColor(...C.muted);
+  doc.text(text, x, y);
+  return y + LH_S;
+}
+
+function estimateRecHeight(doc: jsPDF, rec: Recommendation, rw: number, bw: number): number {
+  let h = 0;
+  // Title
+  const tl = doc.splitTextToSize(rec.title, rw - 26);
+  h += (tl.length as number) * LH + 2;
+  // Why selected heading + reasons
+  h += LH_S;
+  for (const r of rec.triggerReasons) {
+    const rl = doc.splitTextToSize(`\u2022  ${r}`, bw);
+    h += (rl.length as number) * LH_S;
+  }
+  h += 2;
+  // Action steps heading + steps
+  h += LH_S;
+  for (const s of rec.actionSteps) {
+    const rl = doc.splitTextToSize(`1.  ${s.text}`, bw);
+    h += (rl.length as number) * LH_S;
+  }
+  h += 2;
+  // Expected impact heading + text
+  h += LH_S;
+  const il = doc.splitTextToSize(rec.expectedImpact, bw);
+  h += (il.length as number) * LH_S + 1;
+  if (rec.impactStatus === "not_quantified") h += LH_S;
+  // Limitations
+  if (rec.limitations.length > 0) {
+    h += LH_S;
+    for (const l of rec.limitations) {
+      const rl = doc.splitTextToSize(`\u2022  ${l}`, bw);
+      h += (rl.length as number) * LH_S;
+    }
+  }
+  // Missing info
+  if (rec.missingInformation.length > 0) {
+    h += 1 + LH_S;
+    for (const info of rec.missingInformation) {
+      const rl = doc.splitTextToSize(`\u2022  ${info}`, bw);
+      h += (rl.length as number) * LH_S;
+    }
+  }
+  h += 8; // padding + border
+  return h;
+}
+
 function body(doc: jsPDF, text: string, y: number): number {
   y = ensure(doc, y, LH * 2);
   doc.setFont("helvetica", "normal");
@@ -777,3 +847,6 @@ function drawLegDash(doc: jsPDF, x: number, y: number, color: [number, number, n
 function legW(doc: jsPDF, label: string): number {
   return 7 + doc.getTextWidth(label) + 3;
 }
+
+
+export { exportSimulationPdf }

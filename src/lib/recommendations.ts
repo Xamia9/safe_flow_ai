@@ -384,7 +384,7 @@ export const priorityLabels: Record<RecPriority, string> = {
 /* ── Helpers ── */
 
 function formatAmount(n: number): string {
-  return `${Math.round(n).toLocaleString("en-US")} ₫`;
+  return `${Math.round(n).toLocaleString("en-US")} VND`;
 }
 
 function formatGap(n: number): string {
