@@ -1,7 +1,7 @@
 // Server-only Gemini helper. The *.server.ts suffix keeps it out of client bundles.
 import { GoogleGenAI } from "@google/genai";
 
-export const GEMINI_MODEL = "gemini-3.8-flash";
+export const GEMINI_MODEL = "gemini-3.7-flash";
 const TIMEOUT_MS = 15_000;
 
 export type GeminiResult = { status: "success"; text: string } | { status: "error"; message: string };
