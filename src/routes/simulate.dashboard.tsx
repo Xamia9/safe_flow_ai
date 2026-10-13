@@ -1,10 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ClipboardList, RotateCcw } from "lucide-react";
+import { ClipboardList, RotateCcw, Sparkles } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import { StatCard } from "@/components/common/StatCard";
 import { RiskBadge } from "@/components/common/RiskBadge";
 import { BalanceChart } from "@/components/charts/BalanceChart";
+import { AiExplanation } from "@/components/common/AiExplanation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +18,8 @@ import {
 } from "@/lib/scenarioUpdates";
 import { setSimulation, useSimulation } from "@/services/simulationStore";
 import { cn } from "@/lib/utils";
+import { useAiExplain } from "@/hooks/useAiExplain";
+import { buildExplainResultsContext } from "@/lib/ai/contextBuilder";
 import type { FinancialProfile, Scenario } from "@/types/financial";
 
 export const Route = createFileRoute("/simulate/dashboard")({
@@ -38,6 +41,7 @@ const monthOr = (m: number | null) => (m ? `Month ${m}` : NONE);
 
 function Dashboard() {
   const { profile, scenario } = useSimulation();
+  const ai = useAiExplain();
   if (!profile) {
     return (
       <div className="space-y-8">
@@ -52,6 +56,11 @@ function Dashboard() {
   const summary = describeScenario(scenario);
   const tone = (v: number): "negative" | "warning" | "default" => (v < 0 ? "negative" : v < profile.safetyBuffer ? "warning" : "default");
   const setSc = (s: Scenario) => setSimulation({ scenario: s });
+
+  const handleExplain = () => {
+    const ctx = buildExplainResultsContext(profile, scenario, active, summary);
+    ai.call("explain_results", ctx);
+  };
 
   return (
     <div className="space-y-8">
@@ -150,10 +159,28 @@ function Dashboard() {
         </table>
       </section>
 
-      <div className="flex flex-wrap justify-between gap-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleExplain}
+          disabled={ai.status === "loading"}
+        >
+          <Sparkles /> {ai.status === "loading" ? "Generating…" : "Explain My Results"}
+        </Button>
         <Button asChild variant="outline"><Link to="/simulate/input">Edit Financial Profile</Link></Button>
         <Button asChild size="lg"><Link to="/simulate/action-plan">View Action Plan</Link></Button>
       </div>
+
+      <AiExplanation
+        status={ai.status}
+        text={ai.text}
+        error={ai.error}
+        onRetry={handleExplain}
+        onDismiss={ai.reset}
+        sectionId="ai-explain"
+        sectionTitle="AI Explanation"
+      />
     </div>
   );
 }

@@ -1,9 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { ClipboardList, Download, Lightbulb, Plus, RotateCcw, Trash2, TrendingUp, TrendingDown } from "lucide-react";
+import { ClipboardList, Download, Lightbulb, Plus, RotateCcw, Sparkles, Trash2, TrendingUp, TrendingDown } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import { RiskBadge } from "@/components/common/RiskBadge";
+import { AiExplanation } from "@/components/common/AiExplanation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,6 +14,8 @@ import { parseAmount } from "@/lib/validation";
 import { useSimulation } from "@/services/simulationStore";
 import { describeScenario } from "@/lib/scenarioUpdates";
 import { cn } from "@/lib/utils";
+import { useAiExplain } from "@/hooks/useAiExplain";
+import { buildActionPlanContext } from "@/lib/ai/contextBuilder";
 import {
   type Adjustment,
   type AdjustmentKind,
@@ -50,6 +53,7 @@ export const Route = createFileRoute("/simulate/action-plan")({
 function ActionPlan() {
   const { profile, scenario } = useSimulation();
   const [exp, setExp] = useState<ExperimentState>({ adjustments: [] });
+  const ai = useAiExplain();
 
   if (!profile) {
     return (
@@ -71,16 +75,49 @@ function ActionPlan() {
     document.getElementById("experiment-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  const handleGeneratePlan = () => {
+    if (!profile) return;
+    const result = simulate(profile, scenario);
+    const summary = describeScenario(scenario);
+    const recs = selectRecommendations({ profile, scenario, result });
+    const experiment = exp.adjustments.length > 0
+      ? runExperiment(profile, scenario, exp.adjustments)
+      : null;
+    const ctx = buildActionPlanContext(profile, scenario, result, summary, recs, experiment);
+    ai.call("generate_action_plan", ctx);
+  };
+
   return (
     <div className="space-y-8">
       <PageHeader eyebrow="Step 3" title="Action plan & report"
         description="Review your results and test how changes could improve your resilience. Projections are estimates, not guarantees."
-        actions={<Button type="button" onClick={() => exportSimulationPdf(profile, scenario)}><Download /> Export PDF</Button>} />
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleGeneratePlan}
+              disabled={ai.status === "loading"}
+            >
+              <Sparkles /> {ai.status === "loading" ? "Generating…" : "Generate Personalized Action Plan"}
+            </Button>
+            <Button type="button" onClick={() => exportSimulationPdf(profile, scenario)}><Download /> Export PDF</Button>
+          </div>
+        } />
       <Summary profile={profile} scenario={scenario} />
       <RecommendationPanel
         profile={profile}
         scenario={scenario}
         onSimulate={simulateAdjustments}
+      />
+      <AiExplanation
+        status={ai.status}
+        text={ai.text}
+        error={ai.error}
+        onRetry={handleGeneratePlan}
+        onDismiss={ai.reset}
+        sectionId="ai-action-plan"
+        sectionTitle="AI Personalized Action Plan"
       />
       <ExperimentPanel id="experiment-panel" profile={profile} scenario={scenario} exp={exp} setExp={setExp} />
     </div>
