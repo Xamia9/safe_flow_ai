@@ -118,27 +118,27 @@
 @layer components {
   .story-stage {
     transition:
-      color 0.5s ease,
-      opacity 0.5s ease,
-      font-weight 0.5s ease;
+      color 0.6s ease,
+      opacity 0.6s ease,
+      font-weight 0.6s ease,
+      transform 0.6s ease;
   }
   .story-stage-inactive {
-    color: oklch(0.55 0.03 258);
-    opacity: 0.55;
+    color: oklch(0.72 0.015 258);
+    opacity: 0.6;
+    font-weight: 400;
   }
   .story-stage-active {
     color: var(--color-foreground);
     opacity: 1;
   }
   .story-highlight-inactive {
-    color: oklch(0.55 0.03 258);
-    opacity: 0.55;
+    color: oklch(0.72 0.015 258);
+    opacity: 0.6;
   }
   .story-highlight-active {
-    color: oklch(0.6 0.15 160);
+    color: oklch(0.48 0.13 160);
     opacity: 1;
-  }
-  .story-stage-active .story-highlight-active {
     font-weight: 700;
   }
   .story-progress-dot {
@@ -148,16 +148,33 @@
   }
   .story-progress-dot-inactive {
     width: 0.5rem;
-    background-color: oklch(0.7 0.02 260);
+    background-color: oklch(0.8 0.01 258);
   }
   .story-progress-dot-active {
-    width: 2rem;
-    background-color: oklch(0.6 0.15 160);
+    width: 2.5rem;
+    background-color: oklch(0.48 0.13 160);
+  }
+  .story-slogan {
+    transition:
+      opacity 0.8s ease,
+      transform 0.8s ease;
+  }
+  .story-slogan-inactive {
+    opacity: 0.25;
+    transform: translateY(1rem);
+  }
+  .story-slogan-active {
+    opacity: 1;
+    transform: translateY(0);
   }
   @media (prefers-reduced-motion: reduce) {
     .story-stage,
-    .story-progress-dot {
+    .story-progress-dot,
+    .story-slogan {
       transition: none;
+    }
+    .story-slogan-inactive {
+      transform: none;
     }
   }
 }
