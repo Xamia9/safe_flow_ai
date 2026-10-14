@@ -148,7 +148,7 @@ export async function callGroq(
           { role: "user", content: request.context },
         ],
         temperature: 0.3,
-        max_tokens: 1024,
+        max_tokens: MAX_TOKENS[request.feature],
       }),
     });
 
