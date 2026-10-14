@@ -18,7 +18,7 @@ export function AppHeader() {
           <span className="grid h-8 w-8 place-items-center rounded-lg bg-navy text-navy-foreground">
             <ShieldCheck className="h-4 w-4" aria-hidden />
           </span>
-          SafeFlow<span className="text-teal">&nbsp;AI</span>
+          SafeFlow <span className="text-teal">AI</span>
         </Link>
         <nav aria-label="Main" className="hidden gap-1 md:flex">
           {nav.map((n) => (

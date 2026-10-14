@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useActiveStage } from "@/hooks/useActiveStage";
+import { useReadingEmphasis } from "@/hooks/useReadingEmphasis";
 import { useEffect, useRef, useState } from "react";
 
 export const Route = createFileRoute("/")({
@@ -16,14 +16,7 @@ export const Route = createFileRoute("/")({
   component: Home,
 });
 
-interface Stage {
-  eyebrow: string;
-  heading: string;
-  highlight?: string;
-  text: string;
-}
-
-const stages: Stage[] = [
+const steps = [
   {
     eyebrow: "Step 1",
     heading: "Start with your financial picture",
@@ -48,38 +41,54 @@ const stages: Stage[] = [
     highlight: "into action",
     text: "Explore relevant solutions, test supported adjustments, and get AI-assisted explanations and practical next steps.",
   },
-  {
-    eyebrow: "What SafeFlow does",
-    heading: "Clear projections you can trust",
-    text: "Projects month-end balances from your own figures. Compares a baseline with your chosen scenario. Explains exactly why a risk level was assigned.",
-  },
-  {
-    eyebrow: "What it does not do",
-    heading: "Honest about its limits",
-    text: "No probabilities, credit scores, or investment advice. No account or bank connection required. Your data is not stored on a server.",
-  },
 ];
 
-function renderHighlighted(heading: string, highlight: string | undefined, isRevealed: boolean) {
-  if (!highlight) return heading;
+const doesBullets = [
+  "Projects month-end balances from your own figures",
+  "Compares a baseline with your chosen scenario",
+  "Explains exactly why a risk level was assigned",
+];
+
+const doesNotBullets = [
+  "No probabilities, credit scores or investment advice",
+  "No account or bank connection required",
+  "Your data is not stored on a server",
+];
+
+const GREEN = "text-[oklch(0.48_0.13_160)]";
+const INACTIVE = "story-stage-inactive";
+const ACTIVE = "story-stage-active";
+
+function renderHighlighted(
+  heading: string,
+  highlight: string,
+  isActive: boolean,
+) {
   const idx = heading.indexOf(highlight);
   if (idx === -1) return heading;
   const before = heading.slice(0, idx);
   const after = heading.slice(idx + highlight.length);
-  const highlightClass = isRevealed
-    ? "story-highlight-active"
-    : "story-highlight-inactive";
   return (
     <>
       {before}
-      <span className={highlightClass}>{highlight}</span>
+      <span
+        className={
+          isActive ? "story-highlight-active" : "story-highlight-inactive"
+        }
+      >
+        {highlight}
+      </span>
       {after}
     </>
   );
 }
 
 function Home() {
-  const { activeIndex, revealed, setStageRef } = useActiveStage(stages.length);
+  // 1 section heading + 4 steps × 3 emphasis units (eyebrow, heading, body) = 13
+  // + 2 section headings + 3 + 3 bullets = 21 total
+  const TOTAL_UNITS = 21;
+  const { activeSet, setEmphasisRef } = useReadingEmphasis(TOTAL_UNITS);
+
   const sloganRef = useRef<HTMLDivElement>(null);
   const [sloganActive, setSloganActive] = useState(false);
 
@@ -98,6 +107,10 @@ function Home() {
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
+
+  // Helper to compute emphasis unit indices for each step
+  let unitIndex = 0;
+  const nextUnit = () => unitIndex++;
 
   return (
     <>
@@ -131,70 +144,160 @@ function Home() {
 
       {/* How SafeFlow AI Works — single scroll-driven storytelling section, white background */}
       <section className="bg-background">
-        {/* Progress indicator */}
-        <div
-          className="sticky top-16 z-20 mx-auto flex max-w-3xl items-center gap-2 px-4 py-3 sm:px-6"
-          aria-hidden
-        >
-          {stages.map((_, i) => (
-            <span
-              key={i}
-              className={`story-progress-dot h-1.5 rounded-full ${
-                activeIndex === i
-                  ? "story-progress-dot-active"
-                  : "story-progress-dot-inactive"
-              }`}
-            />
-          ))}
-        </div>
-
-        {/* Section heading */}
+        {/* Section heading — registered as emphasis unit 0 */}
         <div className="mx-auto max-w-3xl px-4 pt-16 sm:px-6 lg:pt-24">
-          <h2 className="text-3xl font-extrabold tracking-tight text-navy sm:text-4xl lg:text-5xl">
-            How SafeFlow AI Works
-          </h2>
+          {(() => {
+            const idx = nextUnit();
+            const isActive = activeSet.has(idx);
+            return (
+              <h2
+                ref={setEmphasisRef(idx)}
+                className={`story-stage text-3xl font-extrabold tracking-tight sm:text-4xl lg:text-5xl ${
+                  isActive ? `${ACTIVE} text-navy` : INACTIVE
+                }`}
+              >
+                How SafeFlow AI Works
+              </h2>
+            );
+          })()}
         </div>
 
-        {/* All six stages as continuous narrative */}
+        {/* Steps as continuous narrative */}
         <div className="mx-auto max-w-3xl px-4 sm:px-6">
-          {stages.map((stage, i) => {
-            const isRevealed = revealed[i] ?? false;
+          {steps.map((step) => {
+            const eyebrowIdx = nextUnit();
+            const headingIdx = nextUnit();
+            const bodyIdx = nextUnit();
+            const eyebrowActive = activeSet.has(eyebrowIdx);
+            const headingActive = activeSet.has(headingIdx);
+            const bodyActive = activeSet.has(bodyIdx);
+
             return (
               <div
-                key={stage.eyebrow}
-                ref={setStageRef(i)}
-                data-stage-index={i}
+                key={step.eyebrow}
                 className="min-h-[45vh] py-12 sm:min-h-[40vh] sm:py-16 lg:py-20"
               >
                 <p
+                  ref={setEmphasisRef(eyebrowIdx)}
                   className={`story-stage text-sm font-semibold uppercase tracking-wider ${
-                    isRevealed
-                      ? "story-stage-active text-[oklch(0.48_0.13_160)]"
-                      : "story-stage-inactive"
+                    eyebrowActive ? `${ACTIVE} ${GREEN}` : INACTIVE
                   }`}
                 >
-                  {stage.eyebrow}
+                  {step.eyebrow}
                 </p>
                 <h3
+                  ref={setEmphasisRef(headingIdx)}
                   className={`story-stage mt-4 text-2xl font-bold leading-snug sm:text-3xl lg:text-4xl ${
-                    isRevealed ? "story-stage-active text-navy" : "story-stage-inactive"
+                    headingActive ? `${ACTIVE} text-navy` : INACTIVE
                   }`}
                 >
-                  {renderHighlighted(stage.heading, stage.highlight, isRevealed)}
+                  {renderHighlighted(
+                    step.heading,
+                    step.highlight,
+                    headingActive,
+                  )}
                 </h3>
                 <p
+                  ref={setEmphasisRef(bodyIdx)}
                   className={`story-stage mt-4 text-lg leading-relaxed sm:text-xl ${
-                    isRevealed ? "story-stage-active" : "story-stage-inactive"
+                    bodyActive ? ACTIVE : INACTIVE
                   }`}
                 >
-                  {stage.text}
+                  {step.text}
                 </p>
               </div>
             );
           })}
         </div>
 
-        {/* Slogan — appears after all six stages */}
+        {/* What SafeFlow does / does not do — within the storytelling section, before the slogan */}
+        <div className="mx-auto max-w-3xl px-4 pb-8 sm:px-6">
+          <div className="grid gap-8 pt-8 md:grid-cols-2 md:gap-12">
+            {/* What SafeFlow does */}
+            <div>
+              {(() => {
+                const headingIdx = nextUnit();
+                const headingActive = activeSet.has(headingIdx);
+                return (
+                  <h3
+                    ref={setEmphasisRef(headingIdx)}
+                    className={`story-stage text-2xl font-bold leading-snug sm:text-3xl ${
+                      headingActive ? `${ACTIVE} ${GREEN}` : INACTIVE
+                    }`}
+                  >
+                    What SafeFlow does
+                  </h3>
+                );
+              })()}
+              <ul className="mt-4 space-y-3">
+                {doesBullets.map((bullet) => {
+                  const idx = nextUnit();
+                  const isActive = activeSet.has(idx);
+                  return (
+                    <li
+                      key={bullet}
+                      ref={setEmphasisRef(idx)}
+                      className={`story-stage flex gap-2.5 text-base leading-relaxed ${
+                        isActive ? ACTIVE : INACTIVE
+                      }`}
+                    >
+                      <span
+                        className={`mt-2 h-1.5 w-1.5 shrink-0 rounded-full ${
+                          isActive ? GREEN : "bg-current opacity-60"
+                        }`}
+                        aria-hidden
+                      />
+                      <span>{bullet}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+
+            {/* What it does not do */}
+            <div>
+              {(() => {
+                const headingIdx = nextUnit();
+                const headingActive = activeSet.has(headingIdx);
+                return (
+                  <h3
+                    ref={setEmphasisRef(headingIdx)}
+                    className={`story-stage text-2xl font-bold leading-snug sm:text-3xl ${
+                      headingActive ? `${ACTIVE} ${GREEN}` : INACTIVE
+                    }`}
+                  >
+                    What it does not do
+                  </h3>
+                );
+              })()}
+              <ul className="mt-4 space-y-3">
+                {doesNotBullets.map((bullet) => {
+                  const idx = nextUnit();
+                  const isActive = activeSet.has(idx);
+                  return (
+                    <li
+                      key={bullet}
+                      ref={setEmphasisRef(idx)}
+                      className={`story-stage flex gap-2.5 text-base leading-relaxed ${
+                        isActive ? ACTIVE : INACTIVE
+                      }`}
+                    >
+                      <span
+                        className={`mt-2 h-1.5 w-1.5 shrink-0 rounded-full ${
+                          isActive ? GREEN : "bg-current opacity-60"
+                        }`}
+                        aria-hidden
+                      />
+                      <span>{bullet}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Slogan — the climax of the scrolling experience */}
         <div
           ref={sloganRef}
           className="mx-auto max-w-4xl px-4 py-20 text-center sm:px-6 lg:py-32"
@@ -205,12 +308,10 @@ function Home() {
             }`}
           >
             See the risks. Understand your options.{" "}
-            <span className="text-[oklch(0.48_0.13_160)]">
-              Move forward with confidence.
-            </span>
+            <span className={GREEN}>Move forward with confidence.</span>
           </p>
 
-          {/* CTA — navy background, white text, compact */}
+          {/* CTA — small, restrained */}
           <div
             className={`story-slogan mt-10 flex justify-center ${
               sloganActive ? "story-slogan-active" : "story-slogan-inactive"
@@ -218,7 +319,8 @@ function Home() {
           >
             <Button
               asChild
-              className="bg-navy text-white hover:bg-navy/90 focus-visible:ring-2 focus-visible:ring-teal focus-visible:ring-offset-2 rounded-lg px-6 py-2.5"
+              size="lg"
+              className="bg-navy text-navy-foreground hover:bg-navy/90"
             >
               <Link to="/simulate/input">
                 Start a Simulation <ArrowRight />
