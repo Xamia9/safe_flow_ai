@@ -30,7 +30,6 @@ import {
 } from "@/lib/actionExperiments";
 import {
   type Recommendation,
-  type RecPriority,
   type SolutionId,
   priorityLabels,
   priorityStyles,
@@ -57,6 +56,19 @@ function ActionPlan() {
   const [selectedSolutionId, setSelectedSolutionId] = useState<SolutionId | null>(null);
   const ai = useAiExplain();
 
+  const recs = useMemo(() => {
+    if (!profile) return [];
+    const result = simulate(profile, scenario);
+    return selectRecommendations({ profile, scenario, result });
+  }, [profile, scenario]);
+
+  const cmp = useMemo(
+    () => profile && exp.adjustments.length > 0
+      ? runExperiment(profile, scenario, exp.adjustments)
+      : null,
+    [profile, scenario, exp.adjustments],
+  );
+
   if (!profile) {
     return (
       <div className="space-y-8">
@@ -70,19 +82,8 @@ function ActionPlan() {
 
   const result = simulate(profile, scenario);
   const summary = describeScenario(scenario);
-  const recs = useMemo(
-    () => selectRecommendations({ profile, scenario, result }),
-    [profile, scenario, result],
-  );
 
   const selectedRec = recs.find((r) => r.solutionId === selectedSolutionId) ?? null;
-  const cmp = useMemo(
-    () => exp.adjustments.length > 0
-      ? runExperiment(profile, scenario, exp.adjustments)
-      : null,
-    [profile, scenario, exp.adjustments],
-  );
-
   const hasExperimentResults = cmp !== null && exp.adjustments.length > 0;
 
   const simulateAdjustments = (adjustments: { kind: AdjustmentKind; amount: number }[]) => {

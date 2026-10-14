@@ -142,6 +142,39 @@ describe("useAiExplain hook", () => {
     });
     expect(result.current.error).toBe("Something went wrong. Please try again.");
   });
+
+  it("shows friendly message when error contains HTML", async () => {
+    vi.doMock("@/lib/ai/groq", () => ({
+      explainWithGroq: vi.fn().mockRejectedValue(new Error("<!doctype html><html>Something went wrong on our end</html>")),
+    }));
+    const { useAiExplain } = await import("@/hooks/useAiExplain");
+    const { renderHook, waitFor } = await import("@testing-library/react");
+    const { result } = renderHook(() => useAiExplain());
+
+    await result.current.call("explain_results", "ctx");
+
+    await waitFor(() => {
+      expect(result.current.status).toBe("error");
+    });
+    expect(result.current.error).toBe("The server encountered an error while processing your request. Please try again.");
+    expect(result.current.error).not.toContain("<!doctype");
+  });
+
+  it("handles empty AI response as error", async () => {
+    vi.doMock("@/lib/ai/groq", () => ({
+      explainWithGroq: vi.fn().mockResolvedValue({ text: "  ", implemented: true, model: "test" }),
+    }));
+    const { useAiExplain } = await import("@/hooks/useAiExplain");
+    const { renderHook, waitFor } = await import("@testing-library/react");
+    const { result } = renderHook(() => useAiExplain());
+
+    await result.current.call("explain_results", "ctx");
+
+    await waitFor(() => {
+      expect(result.current.status).toBe("error");
+    });
+    expect(result.current.error).toBe("The AI service returned an empty response. Please try again.");
+  });
 });
 
 describe("AI context builders", () => {
@@ -227,5 +260,62 @@ describe("AI context builders", () => {
     const ctx = buildExplainResultsContext(profile, longScenario, result, summary);
 
     expect(ctx.length).toBeLessThan(8000);
+  });
+
+  it("buildSelectedSolutionContext includes only the selected recommendation", async () => {
+    const { simulate } = await import("@/lib/financialCalculations");
+    const { describeScenario } = await import("@/lib/scenarioUpdates");
+    const { selectRecommendations } = await import("@/lib/recommendations");
+    const { runExperiment } = await import("@/lib/actionExperiments");
+    const { buildSelectedSolutionContext } = await import("@/lib/ai/contextBuilder");
+
+    const result = simulate(profile, scenario);
+    const summary = describeScenario(scenario);
+    const recs = selectRecommendations({ profile, scenario, result });
+    const experiment = runExperiment(profile, scenario, [{ kind: "cutFlexible", amount: 1_000_000 }]);
+
+    const selectedRec = recs[0]!;
+    const ctx = buildSelectedSolutionContext(profile, scenario, result, summary, selectedRec, experiment);
+
+    expect(ctx).toContain("Selected solution to personalize:");
+    expect(ctx).toContain(selectedRec.title);
+    expect(ctx).toContain("Experiment outcomes for this solution");
+    expect(ctx).not.toContain("Recommendation categories");
+  });
+
+  it("buildSelectedSolutionContext handles null experiment", async () => {
+    const { simulate } = await import("@/lib/financialCalculations");
+    const { describeScenario } = await import("@/lib/scenarioUpdates");
+    const { selectRecommendations } = await import("@/lib/recommendations");
+    const { buildSelectedSolutionContext } = await import("@/lib/ai/contextBuilder");
+
+    const result = simulate(profile, scenario);
+    const summary = describeScenario(scenario);
+    const recs = selectRecommendations({ profile, scenario, result });
+
+    const ctx = buildSelectedSolutionContext(profile, scenario, result, summary, recs[0]!, null);
+
+    expect(ctx).toContain("Selected solution to personalize:");
+    expect(ctx).not.toContain("Experiment outcomes");
+  });
+
+  it("buildSelectedSolutionContext does not include other recommendations", async () => {
+    const { simulate } = await import("@/lib/financialCalculations");
+    const { describeScenario } = await import("@/lib/scenarioUpdates");
+    const { selectRecommendations } = await import("@/lib/recommendations");
+    const { buildSelectedSolutionContext } = await import("@/lib/ai/contextBuilder");
+
+    const result = simulate(profile, scenario);
+    const summary = describeScenario(scenario);
+    const recs = selectRecommendations({ profile, scenario, result });
+
+    if (recs.length < 2) return; // skip if only one rec
+
+    const selectedRec = recs[0]!;
+    const otherRec = recs[1]!;
+    const ctx = buildSelectedSolutionContext(profile, scenario, result, summary, selectedRec, null);
+
+    expect(ctx).toContain(selectedRec.title);
+    expect(ctx).not.toContain(otherRec.title);
   });
 });

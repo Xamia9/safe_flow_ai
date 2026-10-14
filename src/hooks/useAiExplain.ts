@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { explainWithGroq, type AiResponse } from "@/lib/ai/groq";
+import { explainWithGroq } from "@/lib/ai/groq";
 
 type Status = "idle" | "loading" | "success" | "error";
 
