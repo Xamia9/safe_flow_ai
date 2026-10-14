@@ -16,7 +16,14 @@ export const Route = createFileRoute("/")({
   component: Home,
 });
 
-const steps = [
+interface Stage {
+  eyebrow: string;
+  heading: string;
+  highlight?: string;
+  text: string;
+}
+
+const stages: Stage[] = [
   {
     eyebrow: "Step 1",
     heading: "Start with your financial picture",
@@ -41,14 +48,25 @@ const steps = [
     highlight: "into action",
     text: "Explore relevant solutions, test supported adjustments, and get AI-assisted explanations and practical next steps.",
   },
+  {
+    eyebrow: "What SafeFlow does",
+    heading: "Clear projections you can trust",
+    text: "Projects month-end balances from your own figures. Compares a baseline with your chosen scenario. Explains exactly why a risk level was assigned.",
+  },
+  {
+    eyebrow: "What it does not do",
+    heading: "Honest about its limits",
+    text: "No probabilities, credit scores, or investment advice. No account or bank connection required. Your data is not stored on a server.",
+  },
 ];
 
-function renderHighlighted(heading: string, highlight: string, isActive: boolean) {
+function renderHighlighted(heading: string, highlight: string | undefined, isRevealed: boolean) {
+  if (!highlight) return heading;
   const idx = heading.indexOf(highlight);
   if (idx === -1) return heading;
   const before = heading.slice(0, idx);
   const after = heading.slice(idx + highlight.length);
-  const highlightClass = isActive
+  const highlightClass = isRevealed
     ? "story-highlight-active"
     : "story-highlight-inactive";
   return (
@@ -61,7 +79,7 @@ function renderHighlighted(heading: string, highlight: string, isActive: boolean
 }
 
 function Home() {
-  const { activeIndex, setStageRef } = useActiveStage(steps.length);
+  const { activeIndex, revealed, setStageRef } = useActiveStage(stages.length);
   const sloganRef = useRef<HTMLDivElement>(null);
   const [sloganActive, setSloganActive] = useState(false);
 
@@ -118,7 +136,7 @@ function Home() {
           className="sticky top-16 z-20 mx-auto flex max-w-3xl items-center gap-2 px-4 py-3 sm:px-6"
           aria-hidden
         >
-          {steps.map((_, i) => (
+          {stages.map((_, i) => (
             <span
               key={i}
               className={`story-progress-dot h-1.5 rounded-full ${
@@ -137,46 +155,46 @@ function Home() {
           </h2>
         </div>
 
-        {/* Steps as continuous narrative */}
+        {/* All six stages as continuous narrative */}
         <div className="mx-auto max-w-3xl px-4 sm:px-6">
-          {steps.map((step, i) => {
-            const isActive = activeIndex === i;
+          {stages.map((stage, i) => {
+            const isRevealed = revealed[i] ?? false;
             return (
               <div
-                key={step.eyebrow}
+                key={stage.eyebrow}
                 ref={setStageRef(i)}
                 data-stage-index={i}
                 className="min-h-[45vh] py-12 sm:min-h-[40vh] sm:py-16 lg:py-20"
               >
                 <p
                   className={`story-stage text-sm font-semibold uppercase tracking-wider ${
-                    isActive
+                    isRevealed
                       ? "story-stage-active text-[oklch(0.48_0.13_160)]"
                       : "story-stage-inactive"
                   }`}
                 >
-                  {step.eyebrow}
+                  {stage.eyebrow}
                 </p>
                 <h3
                   className={`story-stage mt-4 text-2xl font-bold leading-snug sm:text-3xl lg:text-4xl ${
-                    isActive ? "story-stage-active text-navy" : "story-stage-inactive"
+                    isRevealed ? "story-stage-active text-navy" : "story-stage-inactive"
                   }`}
                 >
-                  {renderHighlighted(step.heading, step.highlight, isActive)}
+                  {renderHighlighted(stage.heading, stage.highlight, isRevealed)}
                 </h3>
                 <p
                   className={`story-stage mt-4 text-lg leading-relaxed sm:text-xl ${
-                    isActive ? "story-stage-active" : "story-stage-inactive"
+                    isRevealed ? "story-stage-active" : "story-stage-inactive"
                   }`}
                 >
-                  {step.text}
+                  {stage.text}
                 </p>
               </div>
             );
           })}
         </div>
 
-        {/* Slogan — the climax of the scrolling experience */}
+        {/* Slogan — appears after all six stages */}
         <div
           ref={sloganRef}
           className="mx-auto max-w-4xl px-4 py-20 text-center sm:px-6 lg:py-32"
@@ -192,7 +210,7 @@ function Home() {
             </span>
           </p>
 
-          {/* CTA — small, restrained */}
+          {/* CTA — navy background, white text, compact */}
           <div
             className={`story-slogan mt-10 flex justify-center ${
               sloganActive ? "story-slogan-active" : "story-slogan-inactive"
@@ -200,35 +218,12 @@ function Home() {
           >
             <Button
               asChild
-              size="lg"
-              className="bg-teal text-navy hover:bg-teal/90"
+              className="bg-navy text-white hover:bg-navy/90 focus-visible:ring-2 focus-visible:ring-teal focus-visible:ring-offset-2 rounded-lg px-6 py-2.5"
             >
               <Link to="/simulate/input">
                 Start a Simulation <ArrowRight />
               </Link>
             </Button>
-          </div>
-        </div>
-      </section>
-
-      {/* What SafeFlow does / does not do — preserved, simplified */}
-      <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="rounded-xl border bg-card p-6">
-            <h3 className="font-semibold">What SafeFlow does</h3>
-            <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-              <li>Projects month-end balances from your own figures</li>
-              <li>Compares a baseline with your chosen scenario</li>
-              <li>Explains exactly why a risk level was assigned</li>
-            </ul>
-          </div>
-          <div className="rounded-xl border bg-card p-6">
-            <h3 className="font-semibold">What it does not do</h3>
-            <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-              <li>No probabilities, credit scores or investment advice</li>
-              <li>No account or bank connection required</li>
-              <li>Your data is not stored on a server</li>
-            </ul>
           </div>
         </div>
       </section>

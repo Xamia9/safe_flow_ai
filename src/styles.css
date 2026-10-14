@@ -129,7 +129,7 @@
     font-weight: 400;
   }
   .story-stage-active {
-    color: var(--color-foreground);
+    color: var(--navy);
     opacity: 1;
   }
   .story-highlight-inactive {
@@ -173,8 +173,17 @@
     .story-slogan {
       transition: none;
     }
+    .story-stage-inactive {
+      color: var(--navy);
+      opacity: 1;
+    }
+    .story-highlight-inactive {
+      color: oklch(0.48 0.13 160);
+      opacity: 1;
+    }
     .story-slogan-inactive {
       transform: none;
+      opacity: 1;
     }
   }
 }
