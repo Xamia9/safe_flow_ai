@@ -138,3 +138,53 @@ export function buildActionPlanContext(
 
   return lines.join("\n");
 }
+
+/**
+ * Build context for a single selected solution's AI action plan.
+ * Uses only the selected recommendation and its computed experiment outcomes.
+ */
+export function buildSelectedSolutionContext(
+  profile: FinancialProfile,
+  scenario: Scenario,
+  result: SimulationResult,
+  summary: ScenarioSummary,
+  rec: Recommendation,
+  experiment: ExperimentComparison | null,
+): string {
+  const lines: string[] = [];
+
+  lines.push(`Scenario: ${summary.label}, ${scenario.horizon} months`);
+  lines.push(`Risk level: ${result.risk.level}`);
+  lines.push(`Ending balance: ${formatVND(result.endingBalance)}`);
+  lines.push(`Lowest balance: ${formatVND(result.lowestBalance)}`);
+  lines.push(`Safety buffer: ${formatVND(profile.safetyBuffer)}`);
+
+  lines.push("");
+  lines.push("Selected solution to personalize:");
+  lines.push(`  Title: ${rec.title}`);
+  lines.push(`  Priority: ${rec.priority}`);
+  lines.push(`  Why selected: ${rec.triggerReasons.join("; ")}`);
+  lines.push(`  Action steps: ${rec.actionSteps.map((s) => s.text).join("; ")}`);
+  lines.push(`  Expected impact: ${rec.expectedImpact}`);
+  if (rec.limitations.length > 0) {
+    lines.push(`  Limitations: ${rec.limitations.join("; ")}`);
+  }
+  if (rec.missingInformation.length > 0) {
+    lines.push(`  Information needed: ${rec.missingInformation.join("; ")}`);
+  }
+
+  if (experiment) {
+    lines.push("");
+    lines.push("Experiment outcomes for this solution (before vs after adjustment):");
+    lines.push(`  Risk level: ${experiment.baseline.risk.level} -> ${experiment.adjusted.risk.level}`);
+    lines.push(`  Lowest balance: ${formatVND(experiment.baseline.lowestBalance)} -> ${formatVND(experiment.adjusted.lowestBalance)}`);
+    lines.push(`  Ending balance: ${formatVND(experiment.baseline.endingBalance)} -> ${formatVND(experiment.adjusted.endingBalance)}`);
+    lines.push(`  Reserve deficit: ${formatVND(experiment.baseline.maxReserveDeficit)} -> ${formatVND(experiment.adjusted.maxReserveDeficit)}`);
+    lines.push(`  Max monthly gap: ${formatVND(experiment.baseline.maxMonthlyGap)} -> ${formatVND(experiment.adjusted.maxMonthlyGap)}`);
+    if (experiment.riskImproved) {
+      lines.push("  Risk improved after adjustment.");
+    }
+  }
+
+  return lines.join("\n");
+}

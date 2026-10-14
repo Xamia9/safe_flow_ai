@@ -11,17 +11,31 @@ interface AiState {
 
 const INITIAL: AiState = { status: "idle", text: null, error: null };
 
+function friendlyErrorMessage(err: unknown): string {
+  if (err instanceof Error) {
+    const msg = err.message;
+    if (msg.includes("<!doctype") || msg.includes("<!DOCTYPE") || msg.includes("Something went wrong")) {
+      return "The server encountered an error while processing your request. Please try again.";
+    }
+    return msg;
+  }
+  return "Something went wrong. Please try again.";
+}
+
 export function useAiExplain() {
   const [state, setState] = useState<AiState>(INITIAL);
 
   const call = useCallback(async (feature: "explain_results" | "generate_action_plan", context: string) => {
     setState({ status: "loading", text: null, error: null });
     try {
-      const res: AiResponse = await explainWithGroq({ data: { feature, context } });
-      setState({ status: "success", text: res.text, error: null });
+      const res = await explainWithGroq({ data: { feature, context } });
+      if (res && typeof res.text === "string" && res.text.trim().length > 0) {
+        setState({ status: "success", text: res.text, error: null });
+      } else {
+        setState({ status: "error", text: null, error: "The AI service returned an empty response. Please try again." });
+      }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Something went wrong. Please try again.";
-      setState({ status: "error", text: null, error: msg });
+      setState({ status: "error", text: null, error: friendlyErrorMessage(err) });
     }
   }, []);
 

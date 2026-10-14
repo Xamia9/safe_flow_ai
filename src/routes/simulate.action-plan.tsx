@@ -15,7 +15,7 @@ import { useSimulation } from "@/services/simulationStore";
 import { describeScenario } from "@/lib/scenarioUpdates";
 import { cn } from "@/lib/utils";
 import { useAiExplain } from "@/hooks/useAiExplain";
-import { buildActionPlanContext } from "@/lib/ai/contextBuilder";
+import { buildSelectedSolutionContext } from "@/lib/ai/contextBuilder";
 import {
   type Adjustment,
   type AdjustmentKind,
@@ -31,6 +31,7 @@ import {
 import {
   type Recommendation,
   type RecPriority,
+  type SolutionId,
   priorityLabels,
   priorityStyles,
   selectRecommendations,
@@ -53,6 +54,7 @@ export const Route = createFileRoute("/simulate/action-plan")({
 function ActionPlan() {
   const { profile, scenario } = useSimulation();
   const [exp, setExp] = useState<ExperimentState>({ adjustments: [] });
+  const [selectedSolutionId, setSelectedSolutionId] = useState<SolutionId | null>(null);
   const ai = useAiExplain();
 
   if (!profile) {
@@ -66,60 +68,114 @@ function ActionPlan() {
     );
   }
 
+  const result = simulate(profile, scenario);
+  const summary = describeScenario(scenario);
+  const recs = useMemo(
+    () => selectRecommendations({ profile, scenario, result }),
+    [profile, scenario, result],
+  );
+
+  const selectedRec = recs.find((r) => r.solutionId === selectedSolutionId) ?? null;
+  const cmp = useMemo(
+    () => exp.adjustments.length > 0
+      ? runExperiment(profile, scenario, exp.adjustments)
+      : null,
+    [profile, scenario, exp.adjustments],
+  );
+
+  const hasExperimentResults = cmp !== null && exp.adjustments.length > 0;
+
   const simulateAdjustments = (adjustments: { kind: AdjustmentKind; amount: number }[]) => {
     let next: ExperimentState = { adjustments: [] };
     for (const a of adjustments) {
       if (a.amount > 0) next = addAdjustment(next, { kind: a.kind, amount: a.amount });
     }
     setExp(next);
+    ai.reset();
     document.getElementById("experiment-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  const handleSelectSolution = (solId: SolutionId) => {
+    setSelectedSolutionId(solId);
+    ai.reset();
+  };
+
+  const handleExperimentChange = () => {
+    ai.reset();
+  };
+
   const handleGeneratePlan = () => {
-    if (!profile) return;
-    const result = simulate(profile, scenario);
-    const summary = describeScenario(scenario);
-    const recs = selectRecommendations({ profile, scenario, result });
-    const experiment = exp.adjustments.length > 0
-      ? runExperiment(profile, scenario, exp.adjustments)
-      : null;
-    const ctx = buildActionPlanContext(profile, scenario, result, summary, recs, experiment);
+    if (!profile || !selectedRec) return;
+    const ctx = buildSelectedSolutionContext(
+      profile, scenario, result, summary, selectedRec, cmp,
+    );
     ai.call("generate_action_plan", ctx);
   };
+
+  const canGenerateAiPlan = selectedRec !== null && hasExperimentResults;
 
   return (
     <div className="space-y-8">
       <PageHeader eyebrow="Step 3" title="Action plan & report"
         description="Review your results and test how changes could improve your resilience. Projections are estimates, not guarantees."
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleGeneratePlan}
-              disabled={ai.status === "loading"}
-            >
-              <Sparkles /> {ai.status === "loading" ? "Generating…" : "Generate Personalized Action Plan"}
-            </Button>
-            <Button type="button" onClick={() => exportSimulationPdf(profile, scenario)}><Download /> Export PDF</Button>
-          </div>
-        } />
+        actions={<Button type="button" onClick={() => exportSimulationPdf(profile, scenario)}><Download /> Export PDF</Button>} />
       <Summary profile={profile} scenario={scenario} />
       <RecommendationPanel
         profile={profile}
         scenario={scenario}
         onSimulate={simulateAdjustments}
+        selectedSolutionId={selectedSolutionId}
+        onSelectSolution={handleSelectSolution}
       />
-      <AiExplanation
-        status={ai.status}
-        text={ai.text}
-        error={ai.error}
-        onRetry={handleGeneratePlan}
-        onDismiss={ai.reset}
-        sectionId="ai-action-plan"
-        sectionTitle="AI Personalized Action Plan"
+      <ExperimentPanel
+        id="experiment-panel"
+        profile={profile}
+        scenario={scenario}
+        exp={exp}
+        setExp={setExp}
+        onExperimentChange={handleExperimentChange}
       />
-      <ExperimentPanel id="experiment-panel" profile={profile} scenario={scenario} exp={exp} setExp={setExp} />
+
+      {hasExperimentResults && (
+        <section className="space-y-4" aria-labelledby="ai-plan-h">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-teal" aria-hidden />
+              <h2 id="ai-plan-h" className="text-lg font-semibold">AI Action Plan for Selected Solution</h2>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleGeneratePlan}
+              disabled={ai.status === "loading" || !canGenerateAiPlan}
+            >
+              <Sparkles /> {ai.status === "loading" ? "Generating…" : "Generate AI Action Plan"}
+            </Button>
+          </div>
+
+          {!canGenerateAiPlan && (
+            <p className="text-sm text-muted-foreground">
+              Select a solution above and run "Simulate this adjustment" to enable AI plan generation for that solution.
+            </p>
+          )}
+
+          {selectedRec && (
+            <p className="text-xs text-muted-foreground">
+              The AI plan will personalize <strong>{selectedRec.title}</strong> using your simulation results and tested adjustments.
+            </p>
+          )}
+
+          <AiExplanation
+            status={ai.status}
+            text={ai.text}
+            error={ai.error}
+            onRetry={handleGeneratePlan}
+            onDismiss={ai.reset}
+            sectionId="ai-action-plan"
+            sectionTitle="AI Personalized Action Plan"
+          />
+        </section>
+      )}
     </div>
   );
 }
@@ -151,10 +207,12 @@ function Summary({ profile, scenario }: { profile: FinancialProfile; scenario: S
   );
 }
 
-function RecommendationPanel({ profile, scenario, onSimulate }: {
+function RecommendationPanel({ profile, scenario, onSimulate, selectedSolutionId, onSelectSolution }: {
   profile: FinancialProfile;
   scenario: Scenario;
   onSimulate: (adjustments: { kind: AdjustmentKind; amount: number }[]) => void;
+  selectedSolutionId: SolutionId | null;
+  onSelectSolution: (solId: SolutionId) => void;
 }) {
   const result = useMemo(() => simulate(profile, scenario), [profile, scenario]);
   const recs = useMemo(
@@ -172,7 +230,7 @@ function RecommendationPanel({ profile, scenario, onSimulate }: {
         <p className="mt-3 text-sm text-muted-foreground">
           Your projection is stable — no balance falls below your safety buffer within this horizon.
           No specific recommendation is needed based on the data entered. You can still use the
- experiment panel below to test hypothetical changes.
+          experiment panel below to test hypothetical changes.
         </p>
       </section>
     );
@@ -186,23 +244,36 @@ function RecommendationPanel({ profile, scenario, onSimulate }: {
       </div>
       <p className="text-xs text-muted-foreground">
         These recommendations are generated from your simulation results using fixed rules, not AI.
-        They are not financial advice. Each card explains why it was selected and what it can and cannot tell you.
+        They are not financial advice. Select a solution to simulate it and then generate an AI-personalized plan.
       </p>
       <div className="grid gap-4 lg:grid-cols-3">
         {recs.map((rec) => (
-          <RecCard key={rec.solutionId} rec={rec} onSimulate={onSimulate} />
+          <RecCard
+            key={rec.solutionId}
+            rec={rec}
+            onSimulate={onSimulate}
+            isSelected={selectedSolutionId === rec.solutionId}
+            onSelect={() => onSelectSolution(rec.solutionId)}
+          />
         ))}
       </div>
     </section>
   );
 }
 
-function RecCard({ rec, onSimulate }: {
+function RecCard({ rec, onSimulate, isSelected, onSelect }: {
   rec: Recommendation;
   onSimulate: (adjustments: { kind: AdjustmentKind; amount: number }[]) => void;
+  isSelected: boolean;
+  onSelect: () => void;
 }) {
+  const canSimulate = rec.experimentSupported && rec.experimentAdjustments && rec.experimentAdjustments.some((a) => a.amount > 0);
+
   return (
-    <div className="flex flex-col rounded-xl border bg-card p-5">
+    <div className={cn(
+      "flex flex-col rounded-xl border bg-card p-5 transition-colors",
+      isSelected && "border-teal ring-1 ring-teal/30",
+    )}>
       <div className="flex items-start justify-between gap-2">
         <h3 className="text-base font-semibold">{rec.title}</h3>
         <span className={cn("shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold", priorityStyles[rec.priority])}>
@@ -256,13 +327,23 @@ function RecCard({ rec, onSimulate }: {
         </div>
       )}
 
-      <div className="mt-auto pt-4">
-        {rec.experimentSupported && rec.experimentAdjustments && rec.experimentAdjustments.some((a) => a.amount > 0) ? (
+      <div className="mt-auto space-y-2 pt-4">
+        <Button
+          type="button"
+          variant={isSelected ? "default" : "outline"}
+          size="sm"
+          onClick={onSelect}
+          aria-pressed={isSelected}
+        >
+          {isSelected ? "Selected" : "Select this solution"}
+        </Button>
+        {canSimulate ? (
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={() => onSimulate(rec.experimentAdjustments!)}
+            className="w-full"
           >
             <TrendingUp /> Simulate this adjustment
           </Button>
@@ -281,12 +362,13 @@ function RecCard({ rec, onSimulate }: {
 const adjustmentKinds: AdjustmentKind[] = ["cutFlexible", "cutEssentials", "raiseIncome"];
 const fmtInput = (n: number) => (Number.isFinite(n) ? n.toLocaleString("en-US") : "");
 
-function ExperimentPanel({ id, profile, scenario, exp, setExp }: {
+function ExperimentPanel({ id, profile, scenario, exp, setExp, onExperimentChange }: {
   id: string;
   profile: FinancialProfile;
   scenario: Scenario;
   exp: ExperimentState;
   setExp: React.Dispatch<React.SetStateAction<ExperimentState>>;
+  onExperimentChange: () => void;
 }) {
   const cmp = useMemo(
     () => runExperiment(profile, scenario, exp.adjustments),
@@ -294,10 +376,10 @@ function ExperimentPanel({ id, profile, scenario, exp, setExp }: {
   );
   const hasAdjustments = exp.adjustments.length > 0;
 
-  const addOne = () => setExp((s) => addAdjustment(s, { kind: "cutFlexible", amount: 0 }));
-  const removeOne = (i: number) => setExp((s) => removeAdjustment(s, i));
-  const patchOne = (i: number, patch: Partial<Adjustment>) => setExp((s) => updateAdjustment(s, i, patch));
-  const reset = () => setExp(resetExperiment());
+  const addOne = () => { setExp((s) => addAdjustment(s, { kind: "cutFlexible", amount: 0 })); onExperimentChange(); };
+  const removeOne = (i: number) => { setExp((s) => removeAdjustment(s, i)); onExperimentChange(); };
+  const patchOne = (i: number, patch: Partial<Adjustment>) => { setExp((s) => updateAdjustment(s, i, patch)); onExperimentChange(); };
+  const reset = () => { setExp(resetExperiment()); onExperimentChange(); };
 
   return (
     <section id={id} className="rounded-xl border bg-card p-6" aria-labelledby="exp-h">
