@@ -114,3 +114,50 @@
 
 @utility bg-hero { background: var(--gradient-hero); }
 @utility tabular { font-variant-numeric: tabular-nums; }
+
+@layer components {
+  .story-stage {
+    transition:
+      color 0.5s ease,
+      opacity 0.5s ease,
+      font-weight 0.5s ease;
+  }
+  .story-stage-inactive {
+    color: oklch(0.55 0.03 258);
+    opacity: 0.55;
+  }
+  .story-stage-active {
+    color: var(--color-foreground);
+    opacity: 1;
+  }
+  .story-highlight-inactive {
+    color: oklch(0.55 0.03 258);
+    opacity: 0.55;
+  }
+  .story-highlight-active {
+    color: oklch(0.6 0.15 160);
+    opacity: 1;
+  }
+  .story-stage-active .story-highlight-active {
+    font-weight: 700;
+  }
+  .story-progress-dot {
+    transition:
+      width 0.4s ease,
+      background-color 0.4s ease;
+  }
+  .story-progress-dot-inactive {
+    width: 0.5rem;
+    background-color: oklch(0.7 0.02 260);
+  }
+  .story-progress-dot-active {
+    width: 2rem;
+    background-color: oklch(0.6 0.15 160);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .story-stage,
+    .story-progress-dot {
+      transition: none;
+    }
+  }
+}
