@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ClipboardList, Download, Lightbulb, Plus, RotateCcw, Sparkles, Trash2, TrendingUp, TrendingDown } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -55,6 +55,17 @@ function ActionPlan() {
   const [exp, setExp] = useState<ExperimentState>({ adjustments: [] });
   const [selectedSolutionId, setSelectedSolutionId] = useState<SolutionId | null>(null);
   const ai = useAiExplain();
+  const aiSectionRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (selectedSolutionId !== null && aiSectionRef.current) {
+      const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      aiSectionRef.current.scrollIntoView({
+        behavior: prefersReduced ? "auto" : "smooth",
+        block: "start",
+      });
+    }
+  }, [selectedSolutionId]);
 
   const recs = useMemo(() => {
     if (!profile) return [];
@@ -113,7 +124,7 @@ function ActionPlan() {
     ai.call("generate_action_plan", ctx);
   };
 
-  const canGenerateAiPlan = selectedRec !== null && hasExperimentResults;
+  const canGenerateAiPlan = selectedRec !== null;
 
   return (
     <div className="space-y-8">
@@ -137,8 +148,8 @@ function ActionPlan() {
         onExperimentChange={handleExperimentChange}
       />
 
-      {hasExperimentResults && (
-        <section className="space-y-4" aria-labelledby="ai-plan-h">
+      {selectedRec && (
+        <section ref={aiSectionRef} className="space-y-4" aria-labelledby="ai-plan-h">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-teal" aria-hidden />
@@ -154,17 +165,9 @@ function ActionPlan() {
             </Button>
           </div>
 
-          {!canGenerateAiPlan && (
-            <p className="text-sm text-muted-foreground">
-              Select a solution above and run "Simulate this adjustment" to enable AI plan generation for that solution.
-            </p>
-          )}
-
-          {selectedRec && (
-            <p className="text-xs text-muted-foreground">
-              The AI plan will personalize <strong>{selectedRec.title}</strong> using your simulation results and tested adjustments.
-            </p>
-          )}
+          <p className="text-xs text-muted-foreground">
+            The AI plan will personalize <strong>{selectedRec.title}</strong> using your simulation results{hasExperimentResults ? " and tested adjustments" : ""}.
+          </p>
 
           <AiExplanation
             status={ai.status}
@@ -245,7 +248,7 @@ function RecommendationPanel({ profile, scenario, onSimulate, selectedSolutionId
       </div>
       <p className="text-xs text-muted-foreground">
         These recommendations are generated from your simulation results using fixed rules, not AI.
-        They are not financial advice. Select a solution to simulate it and then generate an AI-personalized plan.
+        They are not financial advice. Select a solution to generate an AI-personalized plan.
       </p>
       <div className="grid gap-4 lg:grid-cols-3">
         {recs.map((rec) => (

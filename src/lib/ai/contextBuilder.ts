@@ -184,6 +184,9 @@ export function buildSelectedSolutionContext(
     if (experiment.riskImproved) {
       lines.push("  Risk improved after adjustment.");
     }
+  } else {
+    lines.push("");
+    lines.push("No experiment has been run for this solution. Do not invent or assume before-and-after financial results. Base the plan on the simulation data and selected solution above.");
   }
 
   return lines.join("\n");
