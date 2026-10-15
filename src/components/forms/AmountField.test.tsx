@@ -97,7 +97,7 @@ describe("monthly amount input", () => {
     render(<Field initial="10000000" />);
     const input = screen.getByRole("textbox") as HTMLInputElement;
     type(input, "0,000,000", 0); expect(input.value).toBe("0,000,000"); expect(input.selectionStart).toBe(0);
-    type(input, "0,00,000", 4); expect(input.value).toBe("000,000"); expect(input.selectionStart).toBe(2);
+    type(input, "0,00,000", 4); expect(input.value).toBe("000,000"); expect(input.selectionStart).toBe(3);
     type(input, "000,00"); expect(input.value).toBe("00,000");
     type(input, ""); expect(input.value).toBe(""); expect(screen.getByRole("status")).toHaveTextContent(/^$/);
     type(input, "5"); expect(input.value).toBe("5");
