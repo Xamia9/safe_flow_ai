@@ -2,7 +2,7 @@ import { useState } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { AmountField } from "./AmountField";
-import { parseProfileDraft } from "@/lib/validation";
+import { parseAmount, parseProfileDraft } from "@/lib/validation";
 import { resetSimulation, setDraftValue, useSimulation } from "@/services/simulationStore";
 
 afterEach(() => { cleanup(); resetSimulation(); });
@@ -28,19 +28,23 @@ describe("monthly amount input", () => {
     expect(input.value).toBe("123456789");
   });
 
-  it("strips commas from pasted values and passes raw digits to parent", () => {
+  it("retains user-entered commas in the display", () => {
     render(<Field />);
     const input = screen.getByRole("textbox") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "10,000,000" } });
-    expect(input.value).toBe("10000000");
-    expect(screen.getByRole("status")).toHaveTextContent(/^10000000$/);
+    expect(input.value).toBe("10,000,000");
+    expect(screen.getByRole("status")).toHaveTextContent(/^10,000,000$/);
   });
 
-  it("strips spaces from pasted values", () => {
-    render(<Field />);
-    const input = screen.getByRole("textbox") as HTMLInputElement;
-    fireEvent.change(input, { target: { value: "1 000 000" } });
-    expect(input.value).toBe("1000000");
+  it("normalizes comma-formatted values to the correct numeric value", () => {
+    expect(parseAmount("10,000,000")).toBe(10000000);
+    expect(parseAmount("1,000,000")).toBe(1000000);
+    expect(parseAmount("10000000")).toBe(10000000);
+  });
+
+  it("rejects malformed comma grouping", () => {
+    expect(Number.isNaN(parseAmount("10,00,000"))).toBe(true);
+    expect(Number.isNaN(parseAmount("1,00,000"))).toBe(true);
   });
 
   it("allows empty and zero and preserves invalid values for validation", () => {
@@ -52,7 +56,7 @@ describe("monthly amount input", () => {
     }
   });
 
-  it("stores pasted amounts without commas and parses numeric profile values", () => {
+  it("stores values with commas and parses numeric profile values correctly", () => {
     function StoredField() {
       const { draft } = useSimulation();
       return <AmountField id="stored" label="Income" value={draft["monthlyIncome"] ?? ""}
@@ -61,7 +65,7 @@ describe("monthly amount input", () => {
     render(<StoredField />);
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "123,456,789" } });
     const saved = JSON.parse(localStorage.getItem("safeflow:v1") ?? "{}");
-    expect(saved.draft.monthlyIncome).toBe("123456789");
+    expect(saved.draft.monthlyIncome).toBe("123,456,789");
     const { profile, errors } = parseProfileDraft({ ...saved.draft, lowSeasonIncome: "0",
       essentialExpenses: "1000000", openingBalance: "0", debtPayments: "0", flexibleExpenses: "" });
     expect(errors).toEqual({});
@@ -79,12 +83,11 @@ describe("monthly amount input", () => {
     const input = screen.getByRole("textbox") as HTMLInputElement;
     type(input, "10000000");
     expect(input.value).toBe("10000000");
-    expect(Number(screen.getByRole("status").textContent)).toBe(10000000);
+    expect(parseAmount(screen.getByRole("status").textContent ?? "")).toBe(10000000);
     type(input, "100000000");
     expect(input.value).toBe("100000000");
     type(input, "1000000000");
     expect(input.value).toBe("1000000000");
-    expect(screen.getByRole("status")).toHaveTextContent(/^1000000000$/);
   });
 
   it("clears and re-enters values without digits reappearing", () => {
@@ -97,12 +100,23 @@ describe("monthly amount input", () => {
     expect(input.value).toBe("5");
   });
 
+  it("allows editing commas and digits without the displayed string changing", () => {
+    render(<Field initial="1,000,000" />);
+    const input = screen.getByRole("textbox") as HTMLInputElement;
+    // Delete a comma in the middle — display should reflect exactly what was typed
+    type(input, "1000,000");
+    expect(input.value).toBe("1000,000");
+    // Add a digit at the end
+    type(input, "1000,0000");
+    expect(input.value).toBe("1000,0000");
+  });
+
   it("replaces a value with a pasted comma-formatted long number", () => {
     render(<Field initial="123456" />);
     const input = screen.getByRole("textbox") as HTMLInputElement;
     type(input, "1,234,567,890");
-    expect(input.value).toBe("1234567890");
-    expect(screen.getByRole("status")).toHaveTextContent(/^1234567890$/);
+    expect(input.value).toBe("1,234,567,890");
+    expect(parseAmount(screen.getByRole("status").textContent ?? "")).toBe(1234567890);
   });
 
   it("adopts external resets", () => {

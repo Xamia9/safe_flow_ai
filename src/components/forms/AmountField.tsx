@@ -2,11 +2,6 @@ import { useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-/** Strip commas/whitespace from user input, preserving decimals and signs. */
-function stripSeparators(value: string): string {
-  return value.replace(/[, ]/g, "");
-}
-
 export function AmountField({ id, label, hint, value, onChange, error, optional }: {
   id: string; label: string; hint?: string | undefined; value: string;
   onChange: (v: string) => void; error?: string | undefined; optional?: boolean;
@@ -21,11 +16,10 @@ export function AmountField({ id, label, hint, value, onChange, error, optional 
   }
 
   const updateValue = (next: string) => {
-    const raw = stripSeparators(next);
-    setDisplay(raw);
-    if (raw !== lastValue.current) {
-      lastValue.current = raw;
-      onChange(raw);
+    setDisplay(next);
+    if (next !== lastValue.current) {
+      lastValue.current = next;
+      onChange(next);
     }
   };
 
