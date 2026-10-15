@@ -299,9 +299,9 @@ function drawBalanceChart(doc: jsPDF, y: number, active: MonthProjection[], base
   const ch = 52;
   y = ensure(doc, y, ch + 16);
 
-  const cx = M + 3;
+  const cx = M;
   const cy = y;
-  const cw = CW - 6;
+  const cw = CW;
   const ih = ch - 14;
   const iw = cw - 32;
 
@@ -407,9 +407,9 @@ function drawIncomeOutflowChart(doc: jsPDF, y: number, months: MonthProjection[]
   const ch = 48;
   y = ensure(doc, y, ch + 14);
 
-  const cx = M + 3;
+  const cx = M;
   const cy = y;
-  const cw = CW - 6;
+  const cw = CW;
   const ih = ch - 12;
   const iw = cw - 32;
 
@@ -577,8 +577,6 @@ function drawRecommendations(doc: jsPDF, y: number, recs: Recommendation[]): num
       y = M;
     }
     y = ensure(doc, y, 20);
-    let cardTop = y;
-    const cardPage = doc.getNumberOfPages();
 
     // Title (wrap with room for priority badge)
     doc.setFont("helvetica", "bold");
@@ -673,16 +671,16 @@ function drawRecommendations(doc: jsPDF, y: number, recs: Recommendation[]): num
       }
     }
 
-    // Card border — if a page break occurred mid-content, reset cardTop to
-    // the top of the current page so the frame covers only what's on this page.
-    if (doc.getNumberOfPages() !== cardPage) {
-      cardTop = M;
+    // Thin horizontal divider between recommendations (not after the last one)
+    if (ri < recs.length - 1) {
+      y += 3;
+      doc.setDrawColor(...C.border);
+      doc.setLineWidth(0.2);
+      doc.line(M, y, M + CW, y);
+      y += 5;
+    } else {
+      y += 4;
     }
-    doc.setDrawColor(...C.border);
-    doc.setLineWidth(0.3);
-    const cardH = y - cardTop + 3;
-    doc.roundedRect(M + 1, cardTop - 1, CW - 2, cardH, 1, 1, "S");
-    y += 6;
   }
 
   return y;
