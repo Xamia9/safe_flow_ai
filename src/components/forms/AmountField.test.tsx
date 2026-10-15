@@ -57,7 +57,7 @@ describe("monthly amount input", () => {
   it("stores pasted amounts without commas and parses numeric profile values", () => {
     function StoredField() {
       const { draft } = useSimulation();
-      return <AmountField id="stored" label="Income" value={draft.monthlyIncome ?? ""}
+      return <AmountField id="stored" label="Income" value={draft["monthlyIncome"] ?? ""}
         onChange={(value) => setDraftValue("monthlyIncome", value)} />;
     }
     render(<StoredField />);

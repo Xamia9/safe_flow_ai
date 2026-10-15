@@ -36,7 +36,7 @@ export function useReadingEmphasis(groups: number[][]) {
       for (let g = 0; g < groups.length; g++) {
         let sum = 0;
         let n = 0;
-        for (const idx of groups[g]) {
+        for (const idx of groups[g] ?? []) {
           const el = refs.current[idx];
           if (!el) continue;
           const rect = el.getBoundingClientRect();
