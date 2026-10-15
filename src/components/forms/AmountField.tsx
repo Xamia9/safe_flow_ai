@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -24,27 +24,32 @@ export function AmountField({ id, label, hint, value, onChange, error, optional 
   onChange: (v: string) => void; error?: string | undefined; optional?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const pendingSelection = useRef<[number, number] | null>(null);
+  // The field owns its displayed string; the parent only ever receives the comma-free raw string.
+  const [display, setDisplay] = useState(() => formatAmountInput(value));
+  const caret = useRef<[number, number] | null>(null);
+  const [, forceRender] = useState(0);
+  const lastValue = useRef(value);
+  if (value !== lastValue.current) {
+    lastValue.current = value;
+    // External change (reset, storage restore): adopt it without touching the caret.
+    if (display.replace(/,/g, "") !== value.replace(/,/g, "")) setDisplay(formatAmountInput(value));
+  }
 
   useLayoutEffect(() => {
-    if (pendingSelection.current && inputRef.current === document.activeElement) {
-      inputRef.current?.setSelectionRange(...pendingSelection.current);
-    }
-    pendingSelection.current = null;
+    const input = inputRef.current;
+    if (caret.current && input && input === document.activeElement) input.setSelectionRange(...caret.current);
+    caret.current = null;
   });
 
-  const updateValue = (input: HTMLInputElement, next: string, start: number, end = start) => {
+  const updateValue = (next: string, start: number, end = start) => {
     const raw = next.replace(/,/g, "");
-    const display = formatAmountInput(raw);
-    const selection: [number, number] = [
-      displayPosition(display, next.slice(0, start).replace(/,/g, "").length),
-      displayPosition(display, next.slice(0, end).replace(/,/g, "").length),
-    ];
-    pendingSelection.current = selection;
-    // Also restore immediately when removing only a separator leaves the stored value unchanged.
-    input.value = display;
-    input.setSelectionRange(...selection);
-    onChange(raw);
+    const formatted = formatAmountInput(raw);
+    const rawBefore = (pos: number) => next.slice(0, pos).replace(/,/g, "").length;
+    caret.current = [displayPosition(formatted, rawBefore(start)), displayPosition(formatted, rawBefore(end))];
+    setDisplay(formatted);
+    if (raw !== lastValue.current) { lastValue.current = raw; onChange(raw); }
+    // Force a render so the caret is restored even when the formatted text did not change.
+    if (formatted === display) forceRender((n) => n + 1);
   };
 
   return (
@@ -57,8 +62,8 @@ export function AmountField({ id, label, hint, value, onChange, error, optional 
           ref={inputRef}
           id={id}
           inputMode="numeric"
-          value={formatAmountInput(value)}
-          onChange={(e) => updateValue(e.currentTarget, e.currentTarget.value,
+          value={display}
+          onChange={(e) => updateValue(e.currentTarget.value,
             e.currentTarget.selectionStart ?? e.currentTarget.value.length,
             e.currentTarget.selectionEnd ?? e.currentTarget.value.length)}
           onKeyDown={(e) => {
@@ -68,10 +73,10 @@ export function AmountField({ id, label, hint, value, onChange, error, optional 
             // A grouping comma is not a digit: delete the adjacent digit rather than getting stuck on it.
             if (e.key === "Backspace" && input.value[start - 1] === ",") {
               e.preventDefault();
-              updateValue(input, input.value.slice(0, start - 2) + input.value.slice(start), start - 2);
+              updateValue(input.value.slice(0, start - 2) + input.value.slice(start), start - 2);
             } else if (e.key === "Delete" && input.value[start] === ",") {
               e.preventDefault();
-              updateValue(input, input.value.slice(0, start) + input.value.slice(start + 2), start);
+              updateValue(input.value.slice(0, start) + input.value.slice(start + 2), start);
             }
           }}
           aria-invalid={!!error}
