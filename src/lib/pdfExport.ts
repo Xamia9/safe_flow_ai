@@ -12,6 +12,7 @@ const M = 16;
 const CW = PW - M * 2;
 const LH = 5;
 const LH_S = 4.2;
+const CHART_PAD = 4; // horizontal inset for chart containers inside content area
 
 /* ── Colors (matching SafeFlow navy/teal identity) ── */
 const C = {
@@ -125,7 +126,7 @@ const FIELDS: FieldDef[] = [
 ];
 
 function drawInputSummary(doc: jsPDF, y: number, profile: FinancialProfile): number {
-  y = secTitle(doc, "Input summary", y);
+  y = secTitleKeep(doc, "Input summary", y, 20);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
   doc.setTextColor(...C.muted);
@@ -184,7 +185,7 @@ function drawInputSummary(doc: jsPDF, y: number, profile: FinancialProfile): num
 /* ── Section 3: Scenario assumptions + risk note ── */
 
 function drawScenario(doc: jsPDF, y: number, sc: Scenario, sm: ScenarioSummary): number {
-  y = secTitle(doc, "Scenario assumptions", y);
+  y = secTitleKeep(doc, "Scenario assumptions", y, 20);
   y = kvRow(doc, "Scenario type", sm.label, y);
   y = kvRow(doc, "Forecast horizon", `${sc.horizon} months`, y);
   if (sm.reductionPct !== null) y = kvRow(doc, "Income reduction", `${sm.reductionPct}%`, y);
@@ -213,7 +214,7 @@ function drawScenario(doc: jsPDF, y: number, sc: Scenario, sm: ScenarioSummary):
 /* ── Section 4: Key results KPI cards ── */
 
 function drawKeyResults(doc: jsPDF, y: number, r: SimulationResult, p: FinancialProfile): number {
-  y = secTitle(doc, "Key results", y);
+  y = secTitleKeep(doc, "Key results", y, 24);
 
   // Risk badge
   const rc = r.risk.level === "High" ? { bg: C.rHighSoft, fg: C.rHigh }
@@ -295,15 +296,15 @@ function drawKeyResults(doc: jsPDF, y: number, r: SimulationResult, p: Financial
 /* ── Section 5: Balance chart (vector) ── */
 
 function drawBalanceChart(doc: jsPDF, y: number, active: MonthProjection[], baseline: MonthProjection[], buffer: number, label: string): number {
-  y = secTitle(doc, "Projected cash balance", y);
+  y = secTitleKeep(doc, "Projected cash balance", y, 70);
   const ch = 52;
   y = ensure(doc, y, ch + 16);
 
-  const cx = M;
+  const cx = M + CHART_PAD;
   const cy = y;
-  const cw = CW;
+  const cw = CW - CHART_PAD * 2;
   const ih = ch - 14;
-  const iw = cw - 32;
+  const iw = cw - 38;
 
   const vals = [...active.map(m => m.closingBalance), ...baseline.map(m => m.closingBalance), buffer, 0];
   const mn = Math.min(...vals);
@@ -319,8 +320,10 @@ function drawBalanceChart(doc: jsPDF, y: number, active: MonthProjection[], base
   doc.setLineWidth(0.3);
   doc.roundedRect(cx, cy, cw, ch, 1, 1, "FD");
 
+  const plotL = cx + 32;
+  const plotR = cx + cw - 6;
   const tY = (v: number) => cy + 3 + ih - ((v - lo) / sp) * ih;
-  const tX = (m: number) => cx + 32 + ((m - 1) / Math.max(1, active.length - 1)) * iw;
+  const tX = (m: number) => plotL + ((m - 1) / Math.max(1, active.length - 1)) * iw;
 
   // Gridlines
   for (let t = 0; t <= 4; t++) {
@@ -328,7 +331,7 @@ function drawBalanceChart(doc: jsPDF, y: number, active: MonthProjection[], base
     const gy = tY(v);
     doc.setDrawColor(...C.cGrid);
     doc.setLineWidth(0.2);
-    doc.line(cx + 32, gy, cx + cw - 3, gy);
+    doc.line(plotL, gy, plotR, gy);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(5.5);
     doc.setTextColor(...C.muted);
@@ -340,10 +343,10 @@ function drawBalanceChart(doc: jsPDF, y: number, active: MonthProjection[], base
     const zy = tY(0);
     doc.setDrawColor(...C.cZero);
     doc.setLineWidth(0.4);
-    doc.line(cx + 32, zy, cx + cw - 3, zy);
+    doc.line(plotL, zy, plotR, zy);
     doc.setFontSize(5.5);
     doc.setTextColor(...C.cZero);
-    doc.text("Zero", cx + 33, zy - 1);
+    doc.text("Zero", plotL + 1, zy - 1);
   }
 
   // Safety buffer line
@@ -352,11 +355,11 @@ function drawBalanceChart(doc: jsPDF, y: number, active: MonthProjection[], base
     doc.setDrawColor(...C.cBuffer);
     doc.setLineWidth(0.4);
     doc.setLineDashPattern([2, 1.5], 0);
-    doc.line(cx + 32, by, cx + cw - 3, by);
+    doc.line(plotL, by, plotR, by);
     doc.setLineDashPattern([], 0);
     doc.setFontSize(5.5);
     doc.setTextColor(...C.cBuffer);
-    doc.text(`Buffer ${vndS(buffer)}`, cx + cw - 4, by - 1, { align: "right" });
+    doc.text(`Buffer ${vndS(buffer)}`, plotR - 1, by - 1, { align: "right" });
   }
 
   // Baseline (dashed)
@@ -391,7 +394,7 @@ function drawBalanceChart(doc: jsPDF, y: number, active: MonthProjection[], base
 
   // Legend
   const ly = cy + ch + 2;
-  let lx = cx + 2;
+  let lx = cx + 4;
   drawLeg(doc, lx, ly, C.cActive, label); lx += legW(doc, label) + 8;
   drawLegDash(doc, lx, ly, C.cBase, "Baseline"); lx += legW(doc, "Baseline") + 8;
   drawLegDash(doc, lx, ly, C.cBuffer, "Safety buffer"); lx += legW(doc, "Safety buffer") + 8;
@@ -403,15 +406,15 @@ function drawBalanceChart(doc: jsPDF, y: number, active: MonthProjection[], base
 /* ── Section 6: Income vs outflow chart ── */
 
 function drawIncomeOutflowChart(doc: jsPDF, y: number, months: MonthProjection[]): number {
-  y = secTitle(doc, "Monthly income vs outflow", y);
+  y = secTitleKeep(doc, "Monthly income vs outflow", y, 64);
   const ch = 48;
   y = ensure(doc, y, ch + 14);
 
-  const cx = M;
+  const cx = M + CHART_PAD;
   const cy = y;
-  const cw = CW;
+  const cw = CW - CHART_PAD * 2;
   const ih = ch - 12;
-  const iw = cw - 32;
+  const iw = cw - 38;
 
   const incomes = months.map(m => m.income);
   const outflows = months.map(m => m.outflow);
@@ -425,15 +428,17 @@ function drawIncomeOutflowChart(doc: jsPDF, y: number, months: MonthProjection[]
   doc.setLineWidth(0.3);
   doc.roundedRect(cx, cy, cw, ch, 1, 1, "FD");
 
+  const plotL = cx + 32;
+  const plotR = cx + cw - 6;
   const tY = (v: number) => cy + 3 + ih - ((v - lo) / sp) * ih;
-  const tX = (m: number) => cx + 32 + ((m - 1) / Math.max(1, months.length - 1)) * iw;
+  const tX = (m: number) => plotL + ((m - 1) / Math.max(1, months.length - 1)) * iw;
 
   for (let t = 0; t <= 3; t++) {
     const v = lo + (sp * t) / 3;
     const gy = tY(v);
     doc.setDrawColor(...C.cGrid);
     doc.setLineWidth(0.2);
-    doc.line(cx + 32, gy, cx + cw - 3, gy);
+    doc.line(plotL, gy, plotR, gy);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(5.5);
     doc.setTextColor(...C.muted);
@@ -468,7 +473,7 @@ function drawIncomeOutflowChart(doc: jsPDF, y: number, months: MonthProjection[]
 
   // Legend
   const ly = cy + ch + 2;
-  let lx = cx + 2;
+  let lx = cx + 4;
   drawLeg(doc, lx, ly, C.cIncome, "Income (adjusted)"); lx += legW(doc, "Income (adjusted)") + 8;
   drawLeg(doc, lx, ly, C.cOutflow, "Outflow");
 
@@ -478,7 +483,7 @@ function drawIncomeOutflowChart(doc: jsPDF, y: number, months: MonthProjection[]
 /* ── Section 7: Monthly table ── */
 
 function drawMonthlyTable(doc: jsPDF, y: number, months: MonthProjection[]): number {
-  y = secTitle(doc, "Monthly cash-flow projection", y);
+  y = secTitleKeep(doc, "Monthly cash-flow projection", y, 18);
 
   const headers = ["Mo.", "Income", "Outflow", "Net flow", "Closing balance", "Status"];
   const colW = [13, 31, 31, 31, 38, 30];
@@ -545,7 +550,7 @@ function drawMonthlyTable(doc: jsPDF, y: number, months: MonthProjection[]): num
 /* ── Section 8: Recommendations ── */
 
 function drawRecommendations(doc: jsPDF, y: number, recs: Recommendation[]): number {
-  y = secTitle(doc, "Recommended next steps", y);
+  y = secTitleKeep(doc, "Recommended next steps", y, 24);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
   doc.setTextColor(...C.muted);
@@ -735,6 +740,12 @@ function secTitle(doc: jsPDF, title: string, y: number): number {
   doc.setLineWidth(0.2);
   doc.line(M, y, M + CW, y);
   return y + 3.5;
+}
+
+function secTitleKeep(doc: jsPDF, title: string, y: number, minContent: number): number {
+  const headingH = 12;
+  if (y + headingH + minContent > PH - M - 10) { doc.addPage(); y = M; }
+  return secTitle(doc, title, y);
 }
 
 function subH(doc: jsPDF, text: string, y: number): number {
