@@ -106,16 +106,14 @@ function Home() {
   // Assign emphasis unit indices:
   // Group 0: section heading (unit 0)
   // Groups 1-4: steps (units 1-12, 3 per step)
-  // Group 5: "What SafeFlow does" heading + 3 bullets (units 13-16)
-  // Group 6: "What it does not do" heading + 3 bullets (units 17-20)
+  // Group 5: both info columns — does heading + 3 bullets + does-not heading + 3 bullets (units 13-20)
   const groups = useMemo<number[][]>(() => [
     [0],                              // section heading
     [1, 2, 3],                        // step 1
     [4, 5, 6],                        // step 2
     [7, 8, 9],                        // step 3
     [10, 11, 12],                     // step 4
-    [13, 14, 15, 16],                 // does heading + 3 bullets
-    [17, 18, 19, 20],                 // does-not heading + 3 bullets
+    [13, 14, 15, 16, 17, 18, 19, 20], // both info columns together
   ], []);
 
   const { activeSet, setEmphasisRef } = useReadingEmphasis(groups);
