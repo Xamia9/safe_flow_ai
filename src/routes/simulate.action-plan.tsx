@@ -364,7 +364,7 @@ function RecCard({ rec, onSimulate, isSelected, onSelect }: {
 }
 
 const adjustmentKinds: AdjustmentKind[] = ["cutFlexible", "cutEssentials", "raiseIncome"];
-const fmtInput = (n: number) => (Number.isFinite(n) ? n.toLocaleString("en-US") : "");
+const fmtInput = (n: number) => (Number.isFinite(n) ? String(Math.round(n)) : "");
 
 function ExperimentPanel({ id, profile, scenario, exp, setExp, onExperimentChange }: {
   id: string;

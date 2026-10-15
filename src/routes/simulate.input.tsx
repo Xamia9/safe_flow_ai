@@ -40,7 +40,7 @@ const fields = [
   { key: "flexibleExpenses", label: "Flexible spending", hint: "Non-essential spending. Blank counts as 0.", optional: true },
 ] as const;
 
-const fmt = (n: number) => (Number.isFinite(n) ? n.toLocaleString("en-US") : "");
+const fmt = (n: number) => (Number.isFinite(n) ? String(Math.round(n)) : "");
 
 function InputPage() {
   const { draft, scenario: sc } = useSimulation();
