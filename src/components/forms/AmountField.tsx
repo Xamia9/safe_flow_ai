@@ -27,9 +27,12 @@ export function AmountField({ id, label, hint, value, onChange, error, optional 
   // The field owns its displayed string; the parent only ever receives the comma-free raw string.
   const [display, setDisplay] = useState(() => formatAmountInput(value));
   const caret = useRef<[number, number] | null>(null);
-  if (display.replace(/,/g, "") !== value.replace(/,/g, "")) {
-    // External change (reset, preset, storage restore): adopt it without touching the caret.
-    setDisplay(formatAmountInput(value));
+  const [, forceRender] = useState(0);
+  const lastValue = useRef(value);
+  if (value !== lastValue.current) {
+    lastValue.current = value;
+    // External change (reset, storage restore): adopt it without touching the caret.
+    if (display.replace(/,/g, "") !== value.replace(/,/g, "")) setDisplay(formatAmountInput(value));
   }
 
   useLayoutEffect(() => {
@@ -44,11 +47,10 @@ export function AmountField({ id, label, hint, value, onChange, error, optional 
     const rawBefore = (pos: number) => next.slice(0, pos).replace(/,/g, "").length;
     caret.current = [displayPosition(formatted, rawBefore(start)), displayPosition(formatted, rawBefore(end))];
     setDisplay(formatted);
-    if (raw !== value) onChange(raw);
+    if (raw !== lastValue.current) { lastValue.current = raw; onChange(raw); }
     // Force a render so the caret is restored even when the formatted text did not change.
     if (formatted === display) forceRender((n) => n + 1);
   };
-  const [, forceRender] = useState(0);
 
   return (
     <div className="space-y-1.5">
