@@ -3,6 +3,7 @@ import { useState } from "react";
 import { AlertTriangle, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { AmountField } from "@/components/forms/AmountField";
+import { NumericInput } from "@/components/forms/NumericInput";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -39,8 +40,6 @@ const fields = [
   { key: "debtPayments", label: "Mandatory debt payment", hint: "Minimum monthly repayments. Enter 0 if none." },
   { key: "flexibleExpenses", label: "Flexible spending", hint: "Non-essential spending. Blank counts as 0.", optional: true },
 ] as const;
-
-const fmt = (n: number) => (Number.isFinite(n) ? String(Math.round(n)) : "");
 
 function InputPage() {
   const { draft, scenario: sc } = useSimulation();
@@ -214,9 +213,8 @@ function InputPage() {
                 </div>
                 <div>
                   <Label htmlFor={`a${i}`} className="text-xs">Amount (VND)</Label>
-                  <Input id={`a${i}`} inputMode="numeric" className="mt-1 w-44 tabular" value={fmt(x.amount)}
-                    onChange={(e) => { const n = parseAmount(e.target.value); updateExp(i, { amount: n === null ? 0 : n }); }}
-                    aria-invalid={!!errors[`unexpected.${i}.amount`]} />
+                  <NumericInput id={`a${i}`} value={x.amount} onChange={(n) => updateExp(i, { amount: n })}
+                    className="mt-1 w-44 tabular" ariaInvalid={!!errors[`unexpected.${i}.amount`]} />
                 </div>
                 <Button type="button" variant="ghost" size="icon" aria-label={`Remove expense ${i + 1}`}
                   onClick={() => setSc({ ...sc, unexpectedExpenses: sc.unexpectedExpenses.filter((_, j) => j !== i) })}>
