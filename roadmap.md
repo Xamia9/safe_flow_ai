@@ -1,5 +1,5 @@
 # SafeFlow AI roadmap
-- [ ] Monthly profile: live comma formatting, cursor-safe editing, and focused verification
+- [x] Monthly profile: live comma formatting, cursor-safe editing, and focused verification
 - [x] Phase 1: foundation, design system, routing, page layouts
 - [x] Phase 2: deterministic financial engine + unit tests
 - [ ] Phase 4: AI assistant (not started)
