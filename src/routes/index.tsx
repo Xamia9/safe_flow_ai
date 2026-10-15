@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useReadingEmphasis } from "@/hooks/useReadingEmphasis";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -84,11 +84,6 @@ function renderHighlighted(
 }
 
 function Home() {
-  // 1 section heading + 4 steps × 3 emphasis units (eyebrow, heading, body) = 13
-  // + 2 section headings + 3 + 3 bullets = 21 total
-  const TOTAL_UNITS = 21;
-  const { activeSet, setEmphasisRef } = useReadingEmphasis(TOTAL_UNITS);
-
   const sloganRef = useRef<HTMLDivElement>(null);
   const [sloganActive, setSloganActive] = useState(false);
 
@@ -108,7 +103,23 @@ function Home() {
     return () => observer.disconnect();
   }, []);
 
-  // Helper to compute emphasis unit indices for each step
+  // Assign emphasis unit indices:
+  // Group 0: section heading (unit 0)
+  // Groups 1-4: steps (units 1-12, 3 per step)
+  // Group 5: "What SafeFlow does" heading + 3 bullets (units 13-16)
+  // Group 6: "What it does not do" heading + 3 bullets (units 17-20)
+  const groups = useMemo<number[][]>(() => [
+    [0],                              // section heading
+    [1, 2, 3],                        // step 1
+    [4, 5, 6],                        // step 2
+    [7, 8, 9],                        // step 3
+    [10, 11, 12],                     // step 4
+    [13, 14, 15, 16],                 // does heading + 3 bullets
+    [17, 18, 19, 20],                 // does-not heading + 3 bullets
+  ], []);
+
+  const { activeSet, setEmphasisRef } = useReadingEmphasis(groups);
+
   let unitIndex = 0;
   const nextUnit = () => unitIndex++;
 
@@ -116,19 +127,19 @@ function Home() {
     <>
       {/* Hero Section */}
       <section className="bg-hero text-navy-foreground">
-        <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20 lg:py-24">
-          <p className="text-xs font-semibold uppercase tracking-wider text-teal">
+        <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-28 lg:py-32">
+          <p className="text-sm font-semibold uppercase tracking-wider text-teal">
             Cash-flow resilience simulator
           </p>
-          <h1 className="mt-3 max-w-3xl text-3xl font-extrabold leading-tight sm:text-4xl lg:text-5xl">
+          <h1 className="mt-4 max-w-3xl text-4xl font-extrabold leading-tight sm:text-5xl lg:text-6xl">
             Know how long your money lasts —{" "}
             <span className="text-teal">before something goes wrong.</span>
           </h1>
-          <p className="mt-4 max-w-2xl text-base leading-relaxed opacity-80 sm:max-w-3xl lg:max-w-4xl lg:text-lg">
+          <p className="mt-5 max-w-2xl text-lg leading-relaxed opacity-80 sm:max-w-3xl lg:max-w-4xl">
             SafeFlow AI projects your month-end balance under the shocks you
             choose, using clear, deterministic formulas. No sign-up required.
           </p>
-          <div className="mt-6 flex flex-wrap gap-3">
+          <div className="mt-8 flex flex-wrap gap-3">
             <Button
               asChild
               size="lg"
@@ -142,17 +153,17 @@ function Home() {
         </div>
       </section>
 
-      {/* How SafeFlow AI Works — single scroll-driven storytelling section, white background */}
+      {/* How SafeFlow AI Works — scroll-driven storytelling, light background */}
       <section className="bg-background">
-        {/* Section heading — registered as emphasis unit 0 */}
-        <div className="mx-auto max-w-3xl px-4 pt-12 sm:px-6 lg:pt-16">
+        {/* Section heading */}
+        <div className="mx-auto max-w-3xl px-4 pt-16 sm:px-6 lg:pt-24">
           {(() => {
             const idx = nextUnit();
             const isActive = activeSet.has(idx);
             return (
               <h2
                 ref={setEmphasisRef(idx)}
-                className={`story-stage text-2xl font-extrabold tracking-tight sm:text-3xl ${
+                className={`story-stage text-3xl font-extrabold tracking-tight sm:text-4xl ${
                   isActive ? `${ACTIVE} text-navy` : INACTIVE
                 }`}
               >
@@ -175,11 +186,11 @@ function Home() {
             return (
               <div
                 key={step.eyebrow}
-                className="min-h-[40vh] py-10 sm:min-h-[35vh] sm:py-12 lg:py-14"
+                className="min-h-[45vh] py-12 sm:min-h-[40vh] sm:py-16 lg:py-20"
               >
                 <p
                   ref={setEmphasisRef(eyebrowIdx)}
-                  className={`story-stage text-xs font-semibold uppercase tracking-wider ${
+                  className={`story-stage text-sm font-semibold uppercase tracking-wider ${
                     eyebrowActive ? `${ACTIVE} ${GREEN}` : INACTIVE
                   }`}
                 >
@@ -187,7 +198,7 @@ function Home() {
                 </p>
                 <h3
                   ref={setEmphasisRef(headingIdx)}
-                  className={`story-stage mt-3 text-xl font-bold leading-snug sm:text-2xl ${
+                  className={`story-stage mt-4 text-2xl font-bold leading-snug sm:text-3xl ${
                     headingActive ? `${ACTIVE} text-navy` : INACTIVE
                   }`}
                 >
@@ -199,7 +210,7 @@ function Home() {
                 </h3>
                 <p
                   ref={setEmphasisRef(bodyIdx)}
-                  className={`story-stage mt-3 text-base leading-relaxed ${
+                  className={`story-stage mt-4 text-lg leading-relaxed ${
                     bodyActive ? ACTIVE : INACTIVE
                   }`}
                 >
@@ -210,9 +221,9 @@ function Home() {
           })}
         </div>
 
-        {/* What SafeFlow does / does not do — within the storytelling section, before the slogan */}
-        <div className="mx-auto max-w-5xl px-4 pb-8 sm:px-6">
-          <div className="grid gap-8 pt-8 md:grid-cols-2 md:gap-12">
+        {/* What SafeFlow does / does not do — two columns on desktop, stacked on mobile */}
+        <div className="mx-auto max-w-5xl px-4 pb-12 sm:px-6">
+          <div className="grid gap-10 pt-10 md:grid-cols-2 md:gap-16">
             {/* What SafeFlow does */}
             <div>
               {(() => {
@@ -221,7 +232,7 @@ function Home() {
                 return (
                   <h3
                     ref={setEmphasisRef(headingIdx)}
-                    className={`story-stage text-xl font-bold leading-snug sm:text-2xl ${
+                    className={`story-stage text-2xl font-bold leading-snug ${
                       headingActive ? `${ACTIVE} ${GREEN}` : INACTIVE
                     }`}
                   >
@@ -229,7 +240,7 @@ function Home() {
                   </h3>
                 );
               })()}
-              <ul className="mt-4 space-y-3">
+              <ul className="mt-5 space-y-4">
                 {doesBullets.map((bullet) => {
                   const idx = nextUnit();
                   const isActive = activeSet.has(idx);
@@ -237,7 +248,7 @@ function Home() {
                     <li
                       key={bullet}
                       ref={setEmphasisRef(idx)}
-                      className={`story-stage flex gap-2.5 text-base leading-relaxed ${
+                      className={`story-stage flex gap-3 text-lg leading-relaxed ${
                         isActive ? ACTIVE : INACTIVE
                       }`}
                     >
@@ -262,7 +273,7 @@ function Home() {
                 return (
                   <h3
                     ref={setEmphasisRef(headingIdx)}
-                    className={`story-stage text-xl font-bold leading-snug sm:text-2xl ${
+                    className={`story-stage text-2xl font-bold leading-snug ${
                       headingActive ? `${ACTIVE} ${GREEN}` : INACTIVE
                     }`}
                   >
@@ -270,7 +281,7 @@ function Home() {
                   </h3>
                 );
               })()}
-              <ul className="mt-4 space-y-3">
+              <ul className="mt-5 space-y-4">
                 {doesNotBullets.map((bullet) => {
                   const idx = nextUnit();
                   const isActive = activeSet.has(idx);
@@ -278,7 +289,7 @@ function Home() {
                     <li
                       key={bullet}
                       ref={setEmphasisRef(idx)}
-                      className={`story-stage flex gap-2.5 text-base leading-relaxed ${
+                      className={`story-stage flex gap-3 text-lg leading-relaxed ${
                         isActive ? ACTIVE : INACTIVE
                       }`}
                     >
@@ -300,10 +311,10 @@ function Home() {
         {/* Slogan — the climax of the scrolling experience */}
         <div
           ref={sloganRef}
-          className="mx-auto max-w-4xl px-4 py-16 text-center sm:px-6 lg:py-20"
+          className="mx-auto max-w-4xl px-4 py-20 text-center sm:px-6 lg:py-32"
         >
           <p
-            className={`story-slogan text-2xl font-extrabold leading-tight tracking-tight sm:text-3xl lg:text-4xl ${
+            className={`story-slogan text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl lg:text-5xl ${
               sloganActive ? "story-slogan-active" : "story-slogan-inactive"
             }`}
           >
@@ -311,9 +322,9 @@ function Home() {
             <span className={GREEN}>Move forward with confidence.</span>
           </p>
 
-          {/* CTA — small, restrained */}
+          {/* CTA — compact navy button */}
           <div
-            className={`story-slogan mt-8 flex justify-center ${
+            className={`story-slogan mt-10 flex justify-center ${
               sloganActive ? "story-slogan-active" : "story-slogan-inactive"
             }`}
           >

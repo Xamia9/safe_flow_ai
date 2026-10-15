@@ -1,48 +1,76 @@
 import { useEffect, useRef, useState } from "react";
 
 /**
- * Bidirectional center-band emphasis hook.
+ * Group-based scroll emphasis hook.
  *
- * Each registered element is active when its vertical center is inside
- * a band centered on the viewport's vertical middle. When the element
- * scrolls past the band (up or down) it deactivates and returns to gray.
- * This works repeatedly in both scroll directions.
+ * Finds the single group of elements whose collective center is closest
+ * to an activation point at ~57% of the viewport height (center of the
+ * 50–65% zone). All elements in that group are activated together; all
+ * others remain muted. Hysteresis prevents flickering when two groups are
+ * nearly equidistant from the activation point.
  */
-export function useReadingEmphasis(count: number) {
+export function useReadingEmphasis(groups: number[][]) {
   const [activeSet, setActiveSet] = useState<Set<number>>(new Set());
   const refs = useRef<(HTMLElement | null)[]>([]);
   const rafId = useRef<number | undefined>(undefined);
+  const currentGroupRef = useRef<number>(-1);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    // Band covers the middle ~30% of the viewport (35%–65% from top).
-    // An element is active when its center falls within this band.
-    const BAND_TOP_RATIO = 0.35;
-    const BAND_BOTTOM_RATIO = 0.65;
+    // Activation point centered in the 50–65% zone
+    const ACTIVATION_RATIO = 0.575;
+    // Current group stays active until another is at least this much closer
+    const HYSTERESIS_PX = 40;
+    // Don't activate anything if the closest group is very far away
+    const MAX_DIST_RATIO = 0.35;
 
     function update() {
       const viewportH = window.innerHeight;
-      const bandTop = viewportH * BAND_TOP_RATIO;
-      const bandBottom = viewportH * BAND_BOTTOM_RATIO;
-      const next = new Set<number>();
+      const activationY = viewportH * ACTIVATION_RATIO;
+      const maxDist = viewportH * MAX_DIST_RATIO;
 
-      for (let i = 0; i < refs.current.length; i++) {
-        const el = refs.current[i];
-        if (!el) continue;
-        const rect = el.getBoundingClientRect();
-        const center = rect.top + rect.height / 2;
-        if (center >= bandTop && center <= bandBottom) {
-          next.add(i);
+      let bestGroup = -1;
+      let bestEffectiveDist = Infinity;
+
+      for (let g = 0; g < groups.length; g++) {
+        let sum = 0;
+        let n = 0;
+        for (const idx of groups[g]) {
+          const el = refs.current[idx];
+          if (!el) continue;
+          const rect = el.getBoundingClientRect();
+          sum += rect.top + rect.height / 2;
+          n++;
+        }
+        if (n === 0) continue;
+
+        const groupCenter = sum / n;
+        const rawDist = Math.abs(groupCenter - activationY);
+
+        // Apply hysteresis: current group is "sticky"
+        const effectiveDist =
+          g === currentGroupRef.current ? rawDist - HYSTERESIS_PX : rawDist;
+
+        if (effectiveDist < bestEffectiveDist) {
+          bestEffectiveDist = effectiveDist;
+          bestGroup = g;
         }
       }
 
-      setActiveSet((prev) => {
-        if (prev.size === next.size && [...prev].every((v) => next.has(v))) {
-          return prev;
+      // Deactivate if even the closest group is too far away
+      if (bestGroup === -1 || bestEffectiveDist > maxDist) {
+        if (currentGroupRef.current !== -1) {
+          currentGroupRef.current = -1;
+          setActiveSet(new Set());
         }
-        return next;
-      });
+        return;
+      }
+
+      if (bestGroup !== currentGroupRef.current) {
+        currentGroupRef.current = bestGroup;
+        setActiveSet(new Set(groups[bestGroup]));
+      }
     }
 
     function onScroll() {
@@ -59,7 +87,7 @@ export function useReadingEmphasis(count: number) {
       window.removeEventListener("resize", onScroll);
       if (rafId.current !== undefined) cancelAnimationFrame(rafId.current);
     };
-  }, [count]);
+  }, [groups]);
 
   const setEmphasisRef = (index: number) => (el: HTMLElement | null) => {
     refs.current[index] = el;
