@@ -12,11 +12,22 @@ export const REQUIRED_FIELDS = [
   "debtPayments",
 ] as const;
 
-/** Parse a user-typed VND amount ("1,500,000"). Blank -> null, invalid -> NaN. */
+/** Parse a user-typed VND amount. Blank -> null, invalid -> NaN.
+ *  Accepts optional thousands separators (e.g. "1,500,000") but only in valid
+ *  grouping positions — malformed input like "10,00,000" yields NaN rather than
+ *  silently becoming a different amount. */
 export function parseAmount(raw: string | undefined): number | null {
-  const t = (raw ?? "").replace(/[,\s₫]/g, "");
+  const t = (raw ?? "").trim();
   if (t === "") return null;
-  const n = Number(t);
+  // If commas are present, validate thousands grouping before stripping.
+  if (t.includes(",")) {
+    const sign = t.startsWith("-") ? "-" : "";
+    const body = sign ? t.slice(1) : t;
+    if (!/^\d{1,3}(,\d{3})*$/.test(body)) return NaN;
+  }
+  const cleaned = t.replace(/[,\s₫]/g, "");
+  if (cleaned === "") return null;
+  const n = Number(cleaned);
   return Number.isFinite(n) ? n : NaN;
 }
 

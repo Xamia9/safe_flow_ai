@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { AmountField, formatAmountInput } from "./AmountField";
+import { AmountField } from "./AmountField";
 import { parseProfileDraft } from "@/lib/validation";
 import { resetSimulation, setDraftValue, useSimulation } from "@/services/simulationStore";
 
@@ -13,36 +13,34 @@ function Field({ initial = "" }: { initial?: string }) {
 }
 
 describe("monthly amount input", () => {
-  it.each([
-    ["1000000", "1,000,000"], ["123456789", "123,456,789"], ["0", "0"], ["", ""],
-    ["1000.25", "1,000.25"], ["-1000", "-1,000"], ["invalid", "invalid"],
-    ["1,000,000", "1,000,000"], ["0000", "0,000"],
-  ])("formats %s without numeric coercion", (raw, formatted) => {
-    expect(formatAmountInput(raw)).toBe(formatted);
+  it("does not insert thousands separators while typing", () => {
+    render(<Field />);
+    const input = screen.getByRole("textbox") as HTMLInputElement;
+    for (const d of "10000000") {
+      fireEvent.change(input, { target: { value: input.value + d } });
+    }
+    expect(input.value).toBe("10000000");
   });
 
-  it("keeps a middle edit and its cursor position, emitting no commas", () => {
+  it("preserves digits without reformatting", () => {
     render(<Field initial="123456789" />);
     const input = screen.getByRole("textbox") as HTMLInputElement;
-    input.focus();
-    fireEvent.change(input, { target: { value: "123,9456,789", selectionStart: 5, selectionEnd: 5 } });
-    expect(input.value).toBe("1,239,456,789");
-    expect(input.selectionStart).toBe(5);
-    expect(screen.getByRole("status")).toHaveTextContent("1239456789");
+    expect(input.value).toBe("123456789");
   });
 
-  it("deletes digits across separators in both directions", () => {
-    render(<Field initial="1234567" />);
+  it("strips commas from pasted values and passes raw digits to parent", () => {
+    render(<Field />);
     const input = screen.getByRole("textbox") as HTMLInputElement;
-    input.focus();
-    input.setSelectionRange(2, 2);
-    fireEvent.keyDown(input, { key: "Backspace" });
-    expect(input.value).toBe("234,567");
-    expect(input.selectionStart).toBe(0);
-    input.setSelectionRange(3, 3);
-    fireEvent.keyDown(input, { key: "Delete" });
-    expect(input.value).toBe("23,467");
-    expect(input.selectionStart).toBe(4);
+    fireEvent.change(input, { target: { value: "10,000,000" } });
+    expect(input.value).toBe("10000000");
+    expect(screen.getByRole("status")).toHaveTextContent(/^10000000$/);
+  });
+
+  it("strips spaces from pasted values", () => {
+    render(<Field />);
+    const input = screen.getByRole("textbox") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "1 000 000" } });
+    expect(input.value).toBe("1000000");
   });
 
   it("allows empty and zero and preserves invalid values for validation", () => {
@@ -71,44 +69,39 @@ describe("monthly amount input", () => {
     expect(profile?.flexibleExpenses).toBe(0);
   });
 
-  const type = (input: HTMLInputElement, value: string, caret = value.length) => {
+  const type = (input: HTMLInputElement, value: string) => {
     input.focus();
-    fireEvent.change(input, { target: { value, selectionStart: caret, selectionEnd: caret } });
+    fireEvent.change(input, { target: { value } });
   };
 
-  it("crosses the 9,999,999 boundary and keeps long numbers intact", () => {
+  it("handles long numbers without separators", () => {
     render(<Field />);
     const input = screen.getByRole("textbox") as HTMLInputElement;
-    let v = "";
-    for (const d of "9999999") { v = input.value + d; type(input, v); }
-    expect(input.value).toBe("9,999,999");
-    type(input, "9,999,9990");
-    expect(input.value).toBe("99,999,990");
-    type(input, "");
     type(input, "10000000");
-    expect(input.value).toBe("10,000,000");
+    expect(input.value).toBe("10000000");
     expect(Number(screen.getByRole("status").textContent)).toBe(10000000);
-    type(input, "100000000"); expect(input.value).toBe("100,000,000");
-    type(input, "1000000000"); expect(input.value).toBe("1,000,000,000");
+    type(input, "100000000");
+    expect(input.value).toBe("100000000");
+    type(input, "1000000000");
+    expect(input.value).toBe("1000000000");
     expect(screen.getByRole("status")).toHaveTextContent(/^1000000000$/);
   });
 
-  it("deletes from start, middle, end and clears without digits reappearing", () => {
+  it("clears and re-enters values without digits reappearing", () => {
     render(<Field initial="10000000" />);
     const input = screen.getByRole("textbox") as HTMLInputElement;
-    type(input, "0,000,000", 0); expect(input.value).toBe("0,000,000"); expect(input.selectionStart).toBe(0);
-    type(input, "0,00,000", 4); expect(input.value).toBe("000,000"); expect(input.selectionStart).toBe(3);
-    type(input, "000,00"); expect(input.value).toBe("00,000");
-    type(input, ""); expect(input.value).toBe(""); expect(screen.getByRole("status")).toHaveTextContent(/^$/);
-    type(input, "5"); expect(input.value).toBe("5");
+    type(input, "");
+    expect(input.value).toBe("");
+    expect(screen.getByRole("status")).toHaveTextContent(/^$/);
+    type(input, "5");
+    expect(input.value).toBe("5");
   });
 
-  it("replaces a selection with a pasted long number", () => {
+  it("replaces a value with a pasted comma-formatted long number", () => {
     render(<Field initial="123456" />);
     const input = screen.getByRole("textbox") as HTMLInputElement;
     type(input, "1,234,567,890");
-    expect(input.value).toBe("1,234,567,890");
-    expect(input.selectionStart).toBe(13);
+    expect(input.value).toBe("1234567890");
     expect(screen.getByRole("status")).toHaveTextContent(/^1234567890$/);
   });
 
@@ -119,7 +112,7 @@ describe("monthly amount input", () => {
     }
     render(<Resettable />);
     const input = screen.getByRole("textbox") as HTMLInputElement;
-    expect(input.value).toBe("1,234");
+    expect(input.value).toBe("1234");
     fireEvent.click(screen.getByRole("button"));
     expect(input.value).toBe("");
   });
