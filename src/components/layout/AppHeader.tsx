@@ -14,11 +14,13 @@ export function AppHeader() {
   return (
     <header className="sticky top-0 z-40 border-b bg-card/90 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-        <Link to="/" className="flex items-center gap-2 font-display text-lg font-bold text-primary">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-navy text-navy-foreground">
-            <ShieldCheck className="h-4 w-4" aria-hidden />
+        <Link to="/" className="flex items-center gap-1.5 font-display text-lg font-bold text-primary">
+          <span className="grid h-7 w-7 place-items-center rounded-lg bg-navy text-navy-foreground">
+            <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
           </span>
-          SafeFlow <span className="text-teal">AI</span>
+          <span className="flex items-baseline">
+            SafeFlow<span className="ml-0.5 text-teal">AI</span>
+          </span>
         </Link>
         <nav aria-label="Main" className="hidden gap-1 md:flex">
           {nav.map((n) => (

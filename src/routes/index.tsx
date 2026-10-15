@@ -114,21 +114,21 @@ function Home() {
 
   return (
     <>
-      {/* Hero Section — unchanged */}
+      {/* Hero Section */}
       <section className="bg-hero text-navy-foreground">
-        <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-28 lg:py-36">
-          <p className="text-sm font-semibold uppercase tracking-wider text-teal">
+        <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20 lg:py-24">
+          <p className="text-xs font-semibold uppercase tracking-wider text-teal">
             Cash-flow resilience simulator
           </p>
-          <h1 className="mt-4 max-w-3xl text-4xl font-extrabold leading-tight sm:text-5xl lg:text-6xl">
+          <h1 className="mt-3 max-w-3xl text-3xl font-extrabold leading-tight sm:text-4xl lg:text-5xl">
             Know how long your money lasts —{" "}
             <span className="text-teal">before something goes wrong.</span>
           </h1>
-          <p className="mt-5 max-w-2xl text-lg opacity-80 sm:text-xl">
+          <p className="mt-4 max-w-2xl text-base leading-relaxed opacity-80 sm:max-w-3xl lg:max-w-4xl lg:text-lg">
             SafeFlow AI projects your month-end balance under the shocks you
             choose, using clear, deterministic formulas. No sign-up required.
           </p>
-          <div className="mt-8 flex flex-wrap gap-3">
+          <div className="mt-6 flex flex-wrap gap-3">
             <Button
               asChild
               size="lg"
@@ -145,14 +145,14 @@ function Home() {
       {/* How SafeFlow AI Works — single scroll-driven storytelling section, white background */}
       <section className="bg-background">
         {/* Section heading — registered as emphasis unit 0 */}
-        <div className="mx-auto max-w-3xl px-4 pt-16 sm:px-6 lg:pt-24">
+        <div className="mx-auto max-w-3xl px-4 pt-12 sm:px-6 lg:pt-16">
           {(() => {
             const idx = nextUnit();
             const isActive = activeSet.has(idx);
             return (
               <h2
                 ref={setEmphasisRef(idx)}
-                className={`story-stage text-3xl font-extrabold tracking-tight sm:text-4xl lg:text-5xl ${
+                className={`story-stage text-2xl font-extrabold tracking-tight sm:text-3xl ${
                   isActive ? `${ACTIVE} text-navy` : INACTIVE
                 }`}
               >
@@ -175,11 +175,11 @@ function Home() {
             return (
               <div
                 key={step.eyebrow}
-                className="min-h-[45vh] py-12 sm:min-h-[40vh] sm:py-16 lg:py-20"
+                className="min-h-[40vh] py-10 sm:min-h-[35vh] sm:py-12 lg:py-14"
               >
                 <p
                   ref={setEmphasisRef(eyebrowIdx)}
-                  className={`story-stage text-sm font-semibold uppercase tracking-wider ${
+                  className={`story-stage text-xs font-semibold uppercase tracking-wider ${
                     eyebrowActive ? `${ACTIVE} ${GREEN}` : INACTIVE
                   }`}
                 >
@@ -187,7 +187,7 @@ function Home() {
                 </p>
                 <h3
                   ref={setEmphasisRef(headingIdx)}
-                  className={`story-stage mt-4 text-2xl font-bold leading-snug sm:text-3xl lg:text-4xl ${
+                  className={`story-stage mt-3 text-xl font-bold leading-snug sm:text-2xl ${
                     headingActive ? `${ACTIVE} text-navy` : INACTIVE
                   }`}
                 >
@@ -199,7 +199,7 @@ function Home() {
                 </h3>
                 <p
                   ref={setEmphasisRef(bodyIdx)}
-                  className={`story-stage mt-4 text-lg leading-relaxed sm:text-xl ${
+                  className={`story-stage mt-3 text-base leading-relaxed ${
                     bodyActive ? ACTIVE : INACTIVE
                   }`}
                 >
@@ -211,7 +211,7 @@ function Home() {
         </div>
 
         {/* What SafeFlow does / does not do — within the storytelling section, before the slogan */}
-        <div className="mx-auto max-w-3xl px-4 pb-8 sm:px-6">
+        <div className="mx-auto max-w-5xl px-4 pb-8 sm:px-6">
           <div className="grid gap-8 pt-8 md:grid-cols-2 md:gap-12">
             {/* What SafeFlow does */}
             <div>
@@ -221,7 +221,7 @@ function Home() {
                 return (
                   <h3
                     ref={setEmphasisRef(headingIdx)}
-                    className={`story-stage text-2xl font-bold leading-snug sm:text-3xl ${
+                    className={`story-stage text-xl font-bold leading-snug sm:text-2xl ${
                       headingActive ? `${ACTIVE} ${GREEN}` : INACTIVE
                     }`}
                   >
@@ -262,7 +262,7 @@ function Home() {
                 return (
                   <h3
                     ref={setEmphasisRef(headingIdx)}
-                    className={`story-stage text-2xl font-bold leading-snug sm:text-3xl ${
+                    className={`story-stage text-xl font-bold leading-snug sm:text-2xl ${
                       headingActive ? `${ACTIVE} ${GREEN}` : INACTIVE
                     }`}
                   >
@@ -300,10 +300,10 @@ function Home() {
         {/* Slogan — the climax of the scrolling experience */}
         <div
           ref={sloganRef}
-          className="mx-auto max-w-4xl px-4 py-20 text-center sm:px-6 lg:py-32"
+          className="mx-auto max-w-4xl px-4 py-16 text-center sm:px-6 lg:py-20"
         >
           <p
-            className={`story-slogan text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl lg:text-5xl ${
+            className={`story-slogan text-2xl font-extrabold leading-tight tracking-tight sm:text-3xl lg:text-4xl ${
               sloganActive ? "story-slogan-active" : "story-slogan-inactive"
             }`}
           >
@@ -313,7 +313,7 @@ function Home() {
 
           {/* CTA — small, restrained */}
           <div
-            className={`story-slogan mt-10 flex justify-center ${
+            className={`story-slogan mt-8 flex justify-center ${
               sloganActive ? "story-slogan-active" : "story-slogan-inactive"
             }`}
           >

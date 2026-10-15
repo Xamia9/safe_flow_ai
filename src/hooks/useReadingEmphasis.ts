@@ -1,16 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 
 /**
- * Reading-position-based emphasis hook.
+ * Bidirectional center-band emphasis hook.
  *
- * Tracks each registered element relative to a "reading band" centered
- * on the vertical middle of the viewport. An element becomes active
- * when its center enters the band — roughly when it reaches the
- * viewport's vertical center — and stays active after scrolling past.
- *
- * This ensures text transitions from gray to navy/green *before* it
- * reaches the top of the screen, while content further down remains
- * gray until the user scrolls toward it.
+ * Each registered element is active when its vertical center is inside
+ * a band centered on the viewport's vertical middle. When the element
+ * scrolls past the band (up or down) it deactivates and returns to gray.
+ * This works repeatedly in both scroll directions.
  */
 export function useReadingEmphasis(count: number) {
   const [activeSet, setActiveSet] = useState<Set<number>>(new Set());
@@ -20,15 +16,15 @@ export function useReadingEmphasis(count: number) {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    // Activation zone: from 35% to 65% of viewport height.
-    // An element becomes active when its center crosses below the
-    // top of this band (i.e. reaches ~35% from top), which is well
-    // before it could be clipped at the top of the viewport.
+    // Band covers the middle ~30% of the viewport (35%–65% from top).
+    // An element is active when its center falls within this band.
     const BAND_TOP_RATIO = 0.35;
+    const BAND_BOTTOM_RATIO = 0.65;
 
     function update() {
       const viewportH = window.innerHeight;
       const bandTop = viewportH * BAND_TOP_RATIO;
+      const bandBottom = viewportH * BAND_BOTTOM_RATIO;
       const next = new Set<number>();
 
       for (let i = 0; i < refs.current.length; i++) {
@@ -36,9 +32,7 @@ export function useReadingEmphasis(count: number) {
         if (!el) continue;
         const rect = el.getBoundingClientRect();
         const center = rect.top + rect.height / 2;
-        // Active once the element's center has scrolled to or above
-        // the top of the reading band (35% from viewport top).
-        if (center <= bandTop) {
+        if (center >= bandTop && center <= bandBottom) {
           next.add(i);
         }
       }
@@ -67,10 +61,9 @@ export function useReadingEmphasis(count: number) {
     };
   }, [count]);
 
-  const setEmphasisRef =
-    (index: number) => (el: HTMLElement | null) => {
-      refs.current[index] = el;
-    };
+  const setEmphasisRef = (index: number) => (el: HTMLElement | null) => {
+    refs.current[index] = el;
+  };
 
   return { activeSet, setEmphasisRef };
 }
