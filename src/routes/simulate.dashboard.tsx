@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ClipboardList, RotateCcw, Sparkles } from "lucide-react";
+import { ChevronDown, ClipboardList, RotateCcw, Sparkles } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import { StatCard } from "@/components/common/StatCard";
@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { useAiExplain } from "@/hooks/useAiExplain";
 import { buildExplainResultsContext } from "@/lib/ai/contextBuilder";
 import type { FinancialProfile, Scenario } from "@/types/financial";
+import { useEffect, useState } from "react";
 
 export const Route = createFileRoute("/simulate/dashboard")({
   head: () => ({
@@ -56,6 +57,13 @@ function Dashboard() {
   const summary = describeScenario(scenario);
   const tone = (v: number): "negative" | "warning" | "default" => (v < 0 ? "negative" : v < profile.safetyBuffer ? "warning" : "default");
   const setSc = (s: Scenario) => setSimulation({ scenario: s });
+
+  const COLLAPSE_THRESHOLD = 6;
+  const totalMonths = active.months.length;
+  const canCollapse = totalMonths > COLLAPSE_THRESHOLD;
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => { setExpanded(false); }, [totalMonths]);
+  const visibleMonths = canCollapse && !expanded ? active.months.slice(0, COLLAPSE_THRESHOLD) : active.months;
 
   const handleExplain = () => {
     const ctx = buildExplainResultsContext(profile, scenario, active, summary);
@@ -140,7 +148,7 @@ function Dashboard() {
             <tr>{["Month", "Income (adjusted)", "Essentials", "Debt payment", "Flexible", "Unexpected", "Net cash flow", "Ending balance", "Buffer status"].map((h) => <th key={h} scope="col" className="px-3 py-2">{h}</th>)}</tr>
           </thead>
           <tbody>
-            {active.months.map((m) => (
+            {visibleMonths.map((m) => (
               <tr key={m.month} className="border-t">
                 <th scope="row" className="px-3 py-2 text-left font-medium">{m.month}</th>
                 <td className="px-3 py-2">{formatVND(m.income)}</td>
@@ -157,6 +165,20 @@ function Dashboard() {
             ))}
           </tbody>
         </table>
+        {canCollapse && (
+          <div className="flex justify-center border-t p-2">
+            <button
+              type="button"
+              onClick={() => setExpanded((e) => !e)}
+              aria-expanded={expanded}
+              aria-label={expanded ? "Show fewer months" : `Show all ${totalMonths} months`}
+              className="flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium text-teal hover:text-teal/80"
+            >
+              {expanded ? "Show less" : `Show all ${totalMonths} months`}
+              <ChevronDown className={cn("h-4 w-4 transition-transform", expanded && "rotate-180")} aria-hidden />
+            </button>
+          </div>
+        )}
       </section>
 
       <div className="flex flex-wrap items-center gap-3">
