@@ -24,3 +24,7 @@ npm run dev
 ```
 
 
+
+## Deployment
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for the verified Cloudflare Workers setup, secret handling, and compatibility rules. Read it before adding dependencies or server code.
