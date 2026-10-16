@@ -2,7 +2,7 @@
 
 > **Read this file before** adding dependencies, changing framework/build configuration, or writing any server-side code.
 
-Audit date: 2026-10-16. Verified items are marked **[verified]**; everything else is **[unverified]**.
+Audit date: 2026-10-16 (updated with official-doc and Wrangler dry-run checks). Verified items are marked **[verified]**; everything else is **[unverified]**.
 
 ## 1. Current stack [verified from package.json / lockfile]
 
@@ -25,39 +25,50 @@ Architecture:
 - PDF export (jsPDF) runs client-side only.
 - Leftover Gemini helpers (`src/lib/gemini.*`) are not used by the UI.
 
-## 2. Target platform: Cloudflare Workers [recommended]
+## 2. Deployment paths (verified 2026-10-16)
 
-**Verdict: compatible as-is.** No migration or adapter change required.
+There are two different things that are easy to confuse:
 
-Evidence:
-- The Lovable Vite config enables Nitro with its Cloudflare preset by default **[verified: `nitro/dist/presets/cloudflare` present; build log]**.
-- `vite build` succeeded on 2026-10-16 and produced **[verified]**:
-  - `dist/server/index.mjs` (Worker entry, ES module)
-  - `dist/server/wrangler.json` (`main: index.mjs`, assets binding `ASSETS` → `../client`, `no_bundle: true`)
-  - `dist/client/` static assets + `_headers`
-- No Node built-ins (`fs`, `path`, `child_process`, `node:*`) are imported in `src/` **[verified by search]**.
-- Browser APIs (`window`, `localStorage`, `matchMedia`) are used only inside effects/handlers **[verified by search; SSR behavior verified by working preview]**.
-- The Groq call uses standard `fetch` + `AbortController`, both native to Workers.
-- `GROQ_API_KEY` does not appear in `dist/client` **[verified by search]**.
+| Path | What it is | Status for this repo |
+| --- | --- | --- |
+| **A. Lovable Publish** | Lovable's own managed hosting. Lovable docs do not say it runs on *your* Cloudflare account, and the Cloudflare connector does not deploy apps ([Lovable hosting](https://docs.lovable.dev/features/hosting), [Cloudflare API connector](https://docs.lovable.dev/integrations/cloudflare-api)). | **Recommended.** Works with the current setup, no changes needed. |
+| **B. Self-deploy to your Cloudflare Workers account** | You run Wrangler yourself against your own account. | Possible with the current Nitro output (dry-run passed, see below). Not the officially documented route. |
 
-Lovable's own Publish button deploys this same Worker build. That is the simplest path; self-deploying with Wrangler is also possible (`npx nitro deploy --prebuilt` or `wrangler deploy -c dist/server/wrangler.json`) **[unverified — not run]**.
+**Nitro preset vs Cloudflare Vite plugin**
+- *Current setup:* `@lovable.dev/vite-tanstack-config` 2.26.5 runs Nitro 3.0.260603-**beta** with its `cloudflare` preset at build time. It produces `dist/server/index.mjs` and a generated `dist/server/wrangler.json` (`no_bundle: true`, `ASSETS` → `../client`, no `compatibility_flags`). Dev runs in Node/Vite, not workerd.
+- *Officially documented route:* Cloudflare's and TanStack's guides tell you to add `@cloudflare/vite-plugin` + `wrangler` and a root `wrangler.jsonc` (`main: @tanstack/react-start/server-entry`, `nodejs_compat`). Dev and preview then run inside workerd ([Cloudflare TanStack Start guide](https://developers.cloudflare.com/workers/framework-guides/web-apps/tanstack-start/), [TanStack hosting](https://tanstack.com/start/latest/docs/framework/react/guide/hosting), [Cloudflare Vite plugin](https://developers.cloudflare.com/workers/vite-plugin/)).
+- TanStack lists Nitro as a separate generic hosting option. **[unverified]** No official doc found that names Nitro 3 beta + this TanStack version as a supported Cloudflare combination. Treat path B as working but unofficial.
+- Do **not** switch to the Vite plugin without approval. It would replace the Lovable config's Nitro step and could break Lovable Publish.
 
-Alternatives were not needed, since Workers fits.
+## 3. Build & bundle size
 
-## 3. Build & deploy facts
-
-- Build command: `npm run build` (`vite build`).
-- Output: `dist/server/` (Worker) + `dist/client/` (static assets).
-- Do **not** set `ssr.external` / `resolve.external`; every package must be bundled.
-- Generated `compatibility_flags` is empty (no `nodejs_compat`). Current code doesn't need it. Adding Node-dependent packages would.
-- Server bundle is ~4.4 MB uncompressed. Cloudflare's compressed Worker size limits differ between Free and Paid plans. Check current limits before deploying. **[unverified]**
+- Build: `npm run build` (`vite build`). Output: `dist/server/` (Worker) and `dist/client/` (assets + `_headers`).
+- **Wrangler dry-run [verified]:** temporary `npx wrangler@latest deploy --dry-run -c dist/server/wrangler.json`, run on a copy of `dist/`, no deploy, project dependencies unchanged.
+  - Result: **Total Upload 4,394.90 KiB / gzip 945.57 KiB**, 25 static asset files, only binding `ASSETS`.
+- **Limit:** since Sep 4, 2026 Cloudflare checks only the uncompressed size, **64 MiB on Free and Paid** (the old 3 MB/10 MB compressed caps were removed) ([limits](https://developers.cloudflare.com/workers/platform/limits/), [changelog](https://developers.cloudflare.com/changelog/post/2026-09-04-increased-worker-size-limit/)). Current usage is about 7% of that limit.
+- Also relevant: Free plan allows 10 ms CPU per request and 100,000 requests/day. Waiting on Groq's `fetch` does not count as CPU. SSR CPU time has **not** been measured.
+- Never set `ssr.external` / `resolve.external`; all packages must be bundled.
 
 ## 4. Secrets (Groq)
 
-- `GROQ_API_KEY` is read **only** inside the `.handler()` of `explainWithGroq` via `process.env["GROQ_API_KEY"]`.
-- On Lovable: set it in **Project Settings → Secrets** (`.env` is not read). On self-hosted Cloudflare: `wrangler secret put GROQ_API_KEY`.
-- Never prefix it with `VITE_`, never read it at module scope, never return it or log it.
-- `.env.example` holds only a placeholder.
+- `GROQ_API_KEY` is read **only** inside the `.handler()` of `explainWithGroq` (`src/lib/ai/groq.ts`).
+- Lovable: set it in **Project Settings → Secrets** (`.env` is not read). Self-deploy: `wrangler secret put GROQ_API_KEY`.
+- Never use a `VITE_` prefix, never read it at module scope, never return or log it. Errors returned to the browser are generic.
+
+### 4a. Public AI endpoint risk (not yet fixed)
+
+`explainWithGroq` is a public POST endpoint. CSRF middleware blocks cross-site *browser* requests, but scripts can still call it directly. Risks:
+- **Quota/cost exhaustion:** each call can use up to ~8,000 characters of input + up to 650 output tokens on your Groq key. Nothing limits calls per visitor.
+- **Free-relay misuse:** `context` is free text, so it can be used as a general-purpose chatbot through your key. The system prompt limits this, but only partly.
+- **Worker request quota:** heavy abuse also uses up your request allowance (100k/day on the Workers Free plan if self-deployed).
+
+**Minimal protection recommended for a public MVP (no auth, no database):**
+1. Lower the limit on `context` length and add a short server-side check that the context looks like SafeFlow's generated summary.
+2. Set a hard monthly spend/usage limit in the Groq dashboard. This is the real backstop.
+3. Per-IP rate limiting at the edge: for path B, Cloudflare WAF rate-limiting rules or the Workers Rate Limiting binding. For path A, there is no built-in limiter, so items 1–2 are the main protection.
+4. Optional: Cloudflare Turnstile on the AI buttons (path B only).
+
+**Publishing advice:** don't publish widely with the AI buttons enabled until **at least items 1 and 2** are done. A private or demo share is lower risk.
 
 ## 5. Must remain compatible
 
@@ -85,11 +96,10 @@ Alternatives were not needed, since Workers fits.
 
 ## 8. Known uncertainties / blockers
 
-- **Public AI endpoint:** `explainWithGroq` has no sign-in or rate limit. Once published, anyone can call it and use your Groq quota.
-- Nitro is a **beta** version; upgrades may change output.
-- A live Groq request from a deployed Worker has not been verified.
-- Worker size against your Cloudflare plan limit has not been verified.
-- Groq request timeout is 30 s. Workers wait on outbound fetches without CPU cost, but plan limits are not verified here.
+- Public Groq endpoint has no limit (see 4a). **Blocker for wide release.**
+- Nitro 3 is a beta. Path B is not the officially documented Cloudflare route.
+- Lovable Publish's underlying infrastructure is not documented as your Cloudflare account. Cloudflare dashboards and limits apply only to path B.
+- Not yet verified: a live Groq call from a deployed build, and SSR CPU time against the 10 ms Free limit.
 
 ## 9. Rules for future Lovable / Bolt.new tasks
 
