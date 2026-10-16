@@ -55,20 +55,24 @@ There are two different things that are easy to confuse:
 - Lovable: set it in **Project Settings → Secrets** (`.env` is not read). Self-deploy: `wrangler secret put GROQ_API_KEY`.
 - Never use a `VITE_` prefix, never read it at module scope, never return or log it. Errors returned to the browser are generic.
 
-### 4a. Public AI endpoint risk (not yet fixed)
+### 4a. Public AI endpoint protection (implemented 2026-10-16)
 
-`explainWithGroq` is a public POST endpoint. CSRF middleware blocks cross-site *browser* requests, but scripts can still call it directly. Risks:
-- **Quota/cost exhaustion:** each call can use up to ~8,000 characters of input + up to 650 output tokens on your Groq key. Nothing limits calls per visitor.
-- **Free-relay misuse:** `context` is free text, so it can be used as a general-purpose chatbot through your key. The system prompt limits this, but only partly.
-- **Worker request quota:** heavy abuse also uses up your request allowance (100k/day on the Workers Free plan if self-deployed).
+`explainWithGroq` is a public POST endpoint. CSRF middleware blocks cross-site *browser* requests, but scripts can still call it directly. The following server-side safeguards are now in place:
 
-**Minimal protection recommended for a public MVP (no auth, no database):**
-1. Lower the limit on `context` length and add a short server-side check that the context looks like SafeFlow's generated summary.
-2. Set a hard monthly spend/usage limit in the Groq dashboard. This is the real backstop.
-3. Per-IP rate limiting at the edge: for path B, Cloudflare WAF rate-limiting rules or the Workers Rate Limiting binding. For path A, there is no built-in limiter, so items 1–2 are the main protection.
-4. Optional: Cloudflare Turnstile on the AI buttons (path B only).
+1. **Input validation (server-side):** Zod schema validates `feature` (enum only) and `context` (string, 1–6000 chars). A `.refine()` check rejects context that does not contain at least one SafeFlow marker (`Scenario:`, `Safety buffer:`, `Risk level:`, or `Risk classification:`), blocking arbitrary free-text relay through your Groq key.
+2. **Defensive truncation:** context is sliced to `MAX_CONTEXT_LENGTH` (6000) before being sent to Groq, so even if validation is bypassed the payload is capped.
+3. **Response length limits:** `max_tokens` is set per feature (400 for explain_results, 650 for generate_action_plan) in the Groq request body.
+4. **Safe error messages:** all errors returned to the browser are generic `AiServiceError` strings — no API keys, stack traces, or internal config. The model is hardcoded server-side; callers cannot override it.
+5. **Timeout:** requests abort after 30 seconds.
 
-**Publishing advice:** don't publish widely with the AI buttons enabled until **at least items 1 and 2** are done. A private or demo share is lower risk.
+**Still not implemented — remaining abuse risks:**
+
+- **No per-visitor rate limiting.** Each call can use up to ~6,000 characters of input + up to 650 output tokens on your Groq key. Nothing limits calls per visitor. This is the primary remaining risk for a public deployment.
+- **Groq spending limit (recommended):** Set a hard monthly spend/usage limit in the Groq dashboard (https://console.groq.com → Settings → Usage/Limits). This is the real backstop against cost exhaustion and should be configured before any public release. It is an additional safeguard, not a replacement for the server-side validation above.
+- **Per-IP rate limiting at the edge:** For path B (self-deployed Cloudflare Workers), use Cloudflare WAF rate-limiting rules or the Workers Rate Limiting binding. For path A (Lovable Publish), there is no built-in limiter, so the spending limit and input validation are the main protection.
+- **Optional:** Cloudflare Turnstile on the AI buttons (path B only).
+
+**Publishing advice:** A private demo with these safeguards is lower risk. For wider public release, add per-IP rate limiting (path B) or keep the AI buttons behind a feature flag (path A) until a rate-limiting solution is available.
 
 ## 5. Must remain compatible
 
@@ -96,7 +100,7 @@ There are two different things that are easy to confuse:
 
 ## 8. Known uncertainties / blockers
 
-- Public Groq endpoint has no limit (see 4a). **Blocker for wide release.**
+- Public Groq endpoint has no per-visitor rate limiting (see 4a). **Blocker for wide public release.** Server-side input validation, context truncation, and response length limits are implemented. A Groq spending limit should be configured before any public release.
 - Nitro 3 is a beta. Path B is not the officially documented Cloudflare route.
 - Lovable Publish's underlying infrastructure is not documented as your Cloudflare account. Cloudflare dashboards and limits apply only to path B.
 - Not yet verified: a live Groq call from a deployed build, and SSR CPU time against the 10 ms Free limit.

@@ -3,13 +3,25 @@ import { createServerFn } from "@tanstack/react-start";
 
 const GROQ_MODEL = "openai/gpt-oss-120b" as const;
 const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions" as const;
-const MAX_CONTEXT_LENGTH = 8000;
+const MAX_CONTEXT_LENGTH = 6000;
 const REQUEST_TIMEOUT_MS = 30_000;
+
+/** Minimum markers that a legitimate SafeFlow context string should contain.
+ *  The context builder always emits at least a "Scenario:" line and a
+ *  "Safety buffer:" or "Risk" line, so require at least one of these. */
+const CONTEXT_MARKERS = ["Scenario:", "Safety buffer:", "Risk level:", "Risk classification:"];
+
+function looksLikeSafeFlowContext(context: string): boolean {
+  return CONTEXT_MARKERS.some((marker) => context.includes(marker));
+}
 
 export const aiRequestSchema = z.object({
   feature: z.enum(["explain_results", "generate_action_plan"]),
   context: z.string().min(1).max(MAX_CONTEXT_LENGTH),
-});
+}).refine(
+  (data) => looksLikeSafeFlowContext(data.context),
+  { message: "Context does not match expected SafeFlow format." },
+);
 
 export type AiRequest = z.infer<typeof aiRequestSchema>;
 
@@ -134,6 +146,7 @@ export async function callGroq(
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
+    const contextPayload = request.context.slice(0, MAX_CONTEXT_LENGTH);
     const response = await fetchFn(GROQ_ENDPOINT, {
       method: "POST",
       signal: controller.signal,
@@ -145,7 +158,7 @@ export async function callGroq(
         model: GROQ_MODEL,
         messages: [
           { role: "system", content: getSystemPrompt(request.feature) },
-          { role: "user", content: request.context },
+          { role: "user", content: contextPayload },
         ],
         temperature: 0.3,
         max_tokens: MAX_TOKENS[request.feature],

@@ -9,7 +9,7 @@ import {
 
 const validInput: AiRequest = {
   feature: "explain_results",
-  context: "Ending balance: 50,000,000 VND. Risk: Medium.",
+  context: "Scenario: 3-month income drop. Safety buffer: 15,000,000 VND. Risk classification: Medium.",
 };
 
 const VALID_KEY = "test-key-abc123";
@@ -62,14 +62,35 @@ describe("AI request validation", () => {
   });
 
   it("rejects oversized context", () => {
-    const long = "x".repeat(8001);
+    const long = "Scenario: " + "x".repeat(6000);
     expect(() => validateAiRequest({ ...validInput, context: long })).toThrow();
   });
 
   it("accepts context at exactly the max length", () => {
-    const max = "x".repeat(8000);
+    const marker = "Scenario: ";
+    const max = marker + "x".repeat(6000 - marker.length);
     const result = validateAiRequest({ ...validInput, context: max });
-    expect(result.context).toHaveLength(8000);
+    expect(result.context).toHaveLength(6000);
+  });
+
+  it("rejects context that does not contain SafeFlow markers", () => {
+    expect(() =>
+      validateAiRequest({ ...validInput, context: "Tell me a joke about finance." }),
+    ).toThrow();
+  });
+
+  it("accepts context that contains only a marker keyword", () => {
+    expect(() =>
+      validateAiRequest({ ...validInput, context: "Scenario:" }),
+    ).not.toThrow();
+  });
+
+  it("accepts context with action-plan markers", () => {
+    const result = validateAiRequest({
+      feature: "generate_action_plan",
+      context: "Scenario: 6-month income drop. Risk level: High. Safety buffer: 10,000,000 VND.",
+    });
+    expect(result.feature).toBe("generate_action_plan");
   });
 
   it("rejects an invalid feature value", () => {
@@ -96,7 +117,8 @@ describe("AI request validation", () => {
   });
 
   it("schema does not declare a model field", () => {
-    const shape = aiRequestSchema.shape;
+    const inner = aiRequestSchema._def?.schema ?? aiRequestSchema;
+    const shape = (inner as { shape: Record<string, unknown> }).shape;
     expect(shape).not.toHaveProperty("model");
   });
 });
@@ -332,6 +354,25 @@ describe("callGroq — credential safety", () => {
   });
 });
 
+describe("callGroq — context truncation safeguard", () => {
+  it("truncates context to MAX_CONTEXT_LENGTH before sending to Groq", async () => {
+    const fetchFn = mockFetch(async () => groqResponse("ok"));
+    const marker = "Scenario: ";
+    const longContext = marker + "x".repeat(6000 - marker.length);
+    await callGroq(
+      { feature: "explain_results", context: longContext },
+      VALID_KEY,
+      { fetchFn },
+    );
+    const calls = (fetchFn as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+    const body = JSON.parse((calls[0]![1] as RequestInit).body as string) as {
+      messages: { role: string; content: string }[];
+    };
+    const userMsg = body.messages.find((m) => m.role === "user");
+    expect(userMsg?.content.length).toBeLessThanOrEqual(6000);
+  });
+});
+
 describe("callGroq — caller cannot override model or feature", () => {
   beforeEach(() => {
     vi.stubEnv("GROQ_API_KEY", "");
@@ -352,7 +393,7 @@ describe("callGroq — caller cannot override model or feature", () => {
   it("rejects an invalid feature at the validation layer", () => {
     const badInput = {
       feature: "delete_everything",
-      context: "hello",
+      context: "Scenario: test context",
     } as unknown;
     expect(() => validateAiRequest(badInput)).toThrow();
   });
