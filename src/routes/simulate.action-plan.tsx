@@ -36,6 +36,7 @@ import {
 } from "@/lib/recommendations";
 import type { FinancialProfile, RiskLevel, Scenario } from "@/types/financial";
 import { exportSimulationPdf } from "@/lib/pdfExport";
+import { RelevantServices } from "@/components/common/RelevantServices";
 
 export const Route = createFileRoute("/simulate/action-plan")({
   head: () => ({
@@ -329,6 +330,8 @@ function RecCard({ rec, onSimulate, isSelected, onSelect }: {
           </ul>
         </div>
       )}
+
+      <RelevantServices solutionId={rec.solutionId} />
 
       <div className="mt-auto space-y-2 pt-4">
         <Button
