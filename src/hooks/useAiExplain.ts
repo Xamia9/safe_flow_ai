@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { explainWithGroq } from "@/lib/ai/groq";
+import type { Language } from "@/i18n/translations";
 
 type Status = "idle" | "loading" | "success" | "error";
 
@@ -25,10 +26,10 @@ function friendlyErrorMessage(err: unknown): string {
 export function useAiExplain() {
   const [state, setState] = useState<AiState>(INITIAL);
 
-  const call = useCallback(async (feature: "explain_results" | "generate_action_plan", context: string) => {
+  const call = useCallback(async (feature: "explain_results" | "generate_action_plan", context: string, language: Language = "en") => {
     setState({ status: "loading", text: null, error: null });
     try {
-      const res = await explainWithGroq({ data: { feature, context } });
+      const res = await explainWithGroq({ data: { feature, context, language } });
       if (res && typeof res.text === "string" && res.text.trim().length > 0) {
         setState({ status: "success", text: res.text, error: null });
       } else {

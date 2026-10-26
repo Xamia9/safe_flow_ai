@@ -3,9 +3,10 @@ import { render, screen } from "@testing-library/react";
 import { AiExplanation } from "@/components/common/AiExplanation";
 import { normalizeAiMarkdown } from "@/components/common/AiMarkdown";
 import { EXPLAIN_RESULTS_PROMPT, GENERATE_ACTION_PLAN_PROMPT } from "@/lib/ai/groq";
+import { LanguageProvider } from "@/i18n/LanguageContext";
 
 const show = (text: string | null) =>
-  render(<AiExplanation status="success" text={text} error={null} onRetry={() => {}} onDismiss={() => {}} sectionId="t" sectionTitle="AI" />);
+  render(<LanguageProvider><AiExplanation status="success" text={text} error={null} onRetry={() => {}} onDismiss={() => {}} sectionId="t" sectionTitle="AI" /></LanguageProvider>);
 
 describe("system prompts", () => {
   it("explain prompt is concise and structured", () => {

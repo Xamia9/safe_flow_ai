@@ -15,10 +15,8 @@ import {
   type RecPriority,
 } from "./recommendations";
 import type { TranslationKey } from "@/i18n/translations";
-import type { t as TFn } from "@/i18n/LanguageContext";
+import type { TranslateFn as T } from "@/i18n/LanguageContext";
 import { formatAmount } from "./formatCurrencyLocalized";
-
-type T = typeof TFn;
 
 interface BuildInput {
   profile: FinancialProfile;

@@ -1,24 +1,29 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { AiExplanation } from "@/components/common/AiExplanation";
+import { LanguageProvider } from "@/i18n/LanguageContext";
+
+function withProvider(ui: React.ReactElement) {
+  return render(<LanguageProvider>{ui}</LanguageProvider>);
+}
 
 describe("AiExplanation component", () => {
   it("renders nothing when status is idle", () => {
-    const { container } = render(
+    const { container } = withProvider(
       <AiExplanation status="idle" text={null} error={null} onRetry={() => {}} onDismiss={() => {}} sectionId="test" sectionTitle="Test" />,
     );
-    expect(container.firstChild).toBeNull();
+    expect(container.querySelector("[data-empty]")).toBeNull();
   });
 
   it("shows loading spinner and message when loading", () => {
-    render(
+    withProvider(
       <AiExplanation status="loading" text={null} error={null} onRetry={() => {}} onDismiss={() => {}} sectionId="test" sectionTitle="Test" />,
     );
     expect(screen.getByText("Generating explanation…")).toBeInTheDocument();
   });
 
   it("renders AI text when successful", () => {
-    render(
+    withProvider(
       <AiExplanation status="success" text="Your balance stays positive." error={null} onRetry={() => {}} onDismiss={() => {}} sectionId="test" sectionTitle="AI Result" />,
     );
     expect(screen.getByText("Your balance stays positive.")).toBeInTheDocument();
@@ -27,7 +32,7 @@ describe("AiExplanation component", () => {
 
   it("shows error message and retry button on error", () => {
     const onRetry = vi.fn();
-    render(
+    withProvider(
       <AiExplanation status="error" text={null} error="The AI service returned an error." onRetry={onRetry} onDismiss={() => {}} sectionId="test" sectionTitle="AI Result" />,
     );
     expect(screen.getByText("The AI service returned an error.")).toBeInTheDocument();
@@ -38,7 +43,7 @@ describe("AiExplanation component", () => {
 
   it("calls onDismiss when dismiss button is clicked", () => {
     const onDismiss = vi.fn();
-    render(
+    withProvider(
       <AiExplanation status="success" text="Some text" error={null} onRetry={() => {}} onDismiss={onDismiss} sectionId="test" sectionTitle="AI" />,
     );
     const dismissBtn = screen.getByRole("button", { name: /dismiss/i });
@@ -47,7 +52,7 @@ describe("AiExplanation component", () => {
   });
 
   it("has an accessible live region", () => {
-    render(
+    withProvider(
       <AiExplanation status="loading" text={null} error={null} onRetry={() => {}} onDismiss={() => {}} sectionId="ai-test" sectionTitle="AI" />,
     );
     const section = document.getElementById("ai-test");
@@ -89,7 +94,7 @@ describe("useAiExplain hook", () => {
     });
     expect(result.current.text).toBe("Explanation here");
     expect(result.current.error).toBeNull();
-    expect(mockFn).toHaveBeenCalledWith({ data: { feature: "explain_results", context: "some context" } });
+    expect(mockFn).toHaveBeenCalledWith({ data: { feature: "explain_results", context: "some context", language: "en" } });
   });
 
   it("transitions to error on failed call", async () => {

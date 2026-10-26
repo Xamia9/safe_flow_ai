@@ -1,9 +1,12 @@
 import { jsPDF } from "jspdf";
 import type { FinancialProfile, MonthProjection, Scenario, SimulationResult } from "@/types/financial";
 import { simulate, compareScenarios } from "./financialCalculations";
-import { selectRecommendations, type Recommendation } from "./recommendations";
+import { type Recommendation } from "./recommendations";
 import { describeScenario, type ScenarioSummary } from "./scenarioUpdates";
-import { formatMonths } from "./formatCurrency";
+import { localizedRecommendations, localizedPriorityLabel } from "./localizedRecommendations";
+import { localizedRiskReasons, localizedScenarioLabel } from "./localizedContent";
+import type { TranslateFn as T } from "@/i18n/LanguageContext";
+import type { TranslationKey } from "@/i18n/translations";
 
 /* ── Page constants ── */
 const PW = 210;
@@ -12,9 +15,9 @@ const M = 16;
 const CW = PW - M * 2;
 const LH = 5;
 const LH_S = 4.2;
-const CHART_PAD = 4; // horizontal inset for chart containers inside content area
+const CHART_PAD = 4;
 
-/* ── Colors (matching SafeFlow navy/teal identity) ── */
+/* ── Colors ── */
 const C = {
   navy: [30, 58, 95] as [number, number, number],
   navySoft: [235, 240, 248] as [number, number, number],
@@ -43,8 +46,6 @@ const C = {
   cGrid: [225, 230, 235] as [number, number, number],
 };
 
-/* ── Currency formatting (VND text — ₫ is not in jsPDF WinAnsi) ── */
-
 function vnd(v: number): string {
   if (!Number.isFinite(v)) return "N/A";
   const r = Math.round(v);
@@ -62,34 +63,30 @@ function vndS(v: number): string {
   return `${s}${a}`;
 }
 
-/* ── Main entry ── */
-
-export function exportSimulationPdf(profile: FinancialProfile, scenario: Scenario): void {
+export function exportSimulationPdf(profile: FinancialProfile, scenario: Scenario, t: T): void {
   if (!profile || !scenario || scenario.horizon <= 0) return;
 
   const result = simulate(profile, scenario);
   const baseline = compareScenarios(profile, scenario).baseline;
   const summary = describeScenario(scenario);
-  const recs = selectRecommendations({ profile, scenario, result });
+  const recs = localizedRecommendations({ profile, scenario, result }, t);
   const now = new Date();
 
   const doc = new jsPDF({ unit: "mm", format: "a4" });
-  let y = drawHeader(doc, scenario, now);
-  y = drawInputSummary(doc, y, profile);
-  y = drawScenario(doc, y, scenario, summary);
-  y = drawKeyResults(doc, y, result, profile);
-  y = drawBalanceChart(doc, y, result.months, baseline.months, profile.safetyBuffer, summary.label);
-  y = drawIncomeOutflowChart(doc, y, result.months);
-  y = drawMonthlyTable(doc, y, result.months);
-  y = drawRecommendations(doc, y, recs);
-  drawFooter(doc);
+  let y = drawHeader(doc, scenario, now, t);
+  y = drawInputSummary(doc, y, profile, t);
+  y = drawScenario(doc, y, scenario, summary, t);
+  y = drawKeyResults(doc, y, result, profile, t);
+  y = drawBalanceChart(doc, y, result.months, baseline.months, profile.safetyBuffer, localizedScenarioLabel(scenario, t), t);
+  y = drawIncomeOutflowChart(doc, y, result.months, t);
+  y = drawMonthlyTable(doc, y, result.months, t);
+  y = drawRecommendations(doc, y, recs, t);
+  drawFooter(doc, t);
 
   doc.save(`safeflow-report-${now.toISOString().slice(0, 10)}.pdf`);
 }
 
-/* ── Section 1: Header banner ── */
-
-function drawHeader(doc: jsPDF, scenario: Scenario, now: Date): number {
+function drawHeader(doc: jsPDF, scenario: Scenario, now: Date, t: T): number {
   doc.setFillColor(...C.navy);
   doc.rect(0, 0, PW, 26, "F");
 
@@ -101,36 +98,36 @@ function drawHeader(doc: jsPDF, scenario: Scenario, now: Date): number {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
   doc.setTextColor(175, 190, 210);
-  doc.text("Cash-flow resilience report", M, 18);
+  doc.text(t("pdf.reportTitle"), M, 18);
 
   const ds = now.toLocaleDateString("en-GB", { year: "numeric", month: "long", day: "numeric" });
   const ts = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
   doc.setFontSize(7.5);
-  doc.text(`Generated ${ds} at ${ts}`, M, 23);
-  doc.text(`Horizon: ${scenario.horizon} months`, PW - M, 23, { align: "right" });
+  doc.text(t("pdf.generated", { date: ds, time: ts }), M, 23);
+  doc.text(t("pdf.horizon", { n: scenario.horizon }), PW - M, 23, { align: "right" });
 
   return 32;
 }
 
-/* ── Section 2: Input Summary (5 required + 1 optional) ── */
-
-interface FieldDef { key: keyof FinancialProfile; label: string; optional?: boolean }
-
-const FIELDS: FieldDef[] = [
-  { key: "monthlyIncome", label: "Normal monthly net income" },
-  { key: "lowSeasonIncome", label: "Low-season monthly net income" },
-  { key: "essentialExpenses", label: "Essential living expenses" },
-  { key: "openingBalance", label: "Available emergency savings" },
-  { key: "debtPayments", label: "Mandatory debt payment" },
-  { key: "flexibleExpenses", label: "Flexible spending (optional)", optional: true },
+const FIELD_KEYS: (keyof FinancialProfile)[] = [
+  "monthlyIncome", "lowSeasonIncome", "essentialExpenses",
+  "openingBalance", "debtPayments", "flexibleExpenses",
 ];
+const FIELD_LABELS: Record<string, TranslationKey> = {
+  monthlyIncome: "input.fMonthlyIncome",
+  lowSeasonIncome: "input.fLowSeasonIncome",
+  essentialExpenses: "input.fEssentialExpenses",
+  openingBalance: "input.fOpeningBalance",
+  debtPayments: "input.fDebtPayments",
+  flexibleExpenses: "input.fFlexibleExpenses",
+};
 
-function drawInputSummary(doc: jsPDF, y: number, profile: FinancialProfile): number {
-  y = secTitleKeep(doc, "Input summary", y, 20);
+function drawInputSummary(doc: jsPDF, y: number, profile: FinancialProfile, t: T): number {
+  y = secTitleKeep(doc, t("pdf.inputSummary"), y, 20);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
   doc.setTextColor(...C.muted);
-  doc.text("All amounts are monthly and in VND. Saved only in this browser.", M, y);
+  doc.text(t("pdf.inputNote"), M, y);
   y += 5;
 
   const colW = CW / 2;
@@ -138,16 +135,17 @@ function drawInputSummary(doc: jsPDF, y: number, profile: FinancialProfile): num
   let col = 0;
   let rowY = y;
 
-  for (const f of FIELDS) {
+  for (const key of FIELD_KEYS) {
     if (rowY + rowH > PH - M - 12) { doc.addPage(); rowY = M; }
     const x = M + col * colW;
-    const val = profile[f.key];
-    const disp = (f.optional && (val === null || val === undefined)) ? "0 VND" : vnd(typeof val === "number" ? val : 0);
+    const val = profile[key];
+    const isOptional = key === "flexibleExpenses";
+    const disp = (isOptional && (val === null || val === undefined)) ? "0 VND" : vnd(typeof val === "number" ? val : 0);
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.5);
     doc.setTextColor(...C.muted);
-    doc.text(f.label, x + 2, rowY);
+    doc.text(t(FIELD_LABELS[key]!), x + 2, rowY);
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
@@ -164,46 +162,42 @@ function drawInputSummary(doc: jsPDF, y: number, profile: FinancialProfile): num
   if (col > 0) rowY += rowH;
   y = rowY + 1;
 
-  // Safety buffer callout
   y = ensure(doc, y, 12);
   doc.setFillColor(...C.navySoft);
   doc.roundedRect(M, y, CW, 11, 2, 2, "F");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.5);
   doc.setTextColor(...C.navy);
-  doc.text("Safety buffer (essentials + debt):", M + 4, y + 5);
+  doc.text(t("pdf.safetyBuffer"), M + 4, y + 5);
   doc.setTextColor(...C.navy);
   doc.text(vnd(profile.safetyBuffer), M + 80, y + 5);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
   doc.setTextColor(...C.muted);
-  doc.text("One month of essential expenses plus mandatory debt payment (E + D).", M + 4, y + 9);
+  doc.text(t("pdf.safetyBufferNote"), M + 4, y + 9);
 
   return y + 16;
 }
 
-/* ── Section 3: Scenario assumptions + risk note ── */
+function drawScenario(doc: jsPDF, y: number, sc: Scenario, sm: ScenarioSummary, t: T): number {
+  y = secTitleKeep(doc, t("pdf.scenarioAssumptions"), y, 20);
+  y = kvRow(doc, t("pdf.scenarioType"), localizedScenarioLabel(sc, t), y);
+  y = kvRow(doc, t("pdf.forecastHorizon"), t("format.monthsValue", { n: sc.horizon }), y);
+  if (sm.reductionPct !== null) y = kvRow(doc, t("pdf.incomeReduction"), `${sm.reductionPct}%`, y);
+  if (sm.affectedMonths) y = kvRow(doc, t("pdf.affectedMonths"), sm.affectedMonths, y);
+  for (const e of sm.expenses) y = kvRow(doc, t("pdf.unexpectedExpenseMonth", { n: e.month }), vnd(e.amount), y);
 
-function drawScenario(doc: jsPDF, y: number, sc: Scenario, sm: ScenarioSummary): number {
-  y = secTitleKeep(doc, "Scenario assumptions", y, 20);
-  y = kvRow(doc, "Scenario type", sm.label, y);
-  y = kvRow(doc, "Forecast horizon", `${sc.horizon} months`, y);
-  if (sm.reductionPct !== null) y = kvRow(doc, "Income reduction", `${sm.reductionPct}%`, y);
-  if (sm.affectedMonths) y = kvRow(doc, "Affected months", sm.affectedMonths, y);
-  for (const e of sm.expenses) y = kvRow(doc, `Unexpected expense (month ${e.month})`, vnd(e.amount), y);
-
-  // Risk classification note
   y = ensure(doc, y, 16);
   doc.setFillColor(...C.tealSoft);
   doc.roundedRect(M, y, CW, 14, 2, 2, "F");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
   doc.setTextColor(...C.teal);
-  doc.text("Risk classification", M + 4, y + 4.5);
+  doc.text(t("pdf.riskClassification"), M + 4, y + 4.5);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...C.text);
   doc.setFontSize(7);
-  const rn = "Risk level is based on projected month-end balances: High = any negative month-end; Medium = any month below the safety buffer (none negative); Low = all months at or above the buffer. The opening balance may initially be below the safety buffer — that alone does not raise the risk level unless a projected month-end also falls below it.";
+  const rn = t("pdf.riskNote");
   const rl = doc.splitTextToSize(rn, CW - 8);
   doc.text(rl, M + 4, y + 7.5);
   y += 14 + (rl.length - 1) * 3.2 + 2;
@@ -211,12 +205,9 @@ function drawScenario(doc: jsPDF, y: number, sc: Scenario, sm: ScenarioSummary):
   return y + 2;
 }
 
-/* ── Section 4: Key results KPI cards ── */
+function drawKeyResults(doc: jsPDF, y: number, r: SimulationResult, p: FinancialProfile, t: T): number {
+  y = secTitleKeep(doc, t("pdf.keyResults"), y, 24);
 
-function drawKeyResults(doc: jsPDF, y: number, r: SimulationResult, p: FinancialProfile): number {
-  y = secTitleKeep(doc, "Key results", y, 24);
-
-  // Risk badge
   const rc = r.risk.level === "High" ? { bg: C.rHighSoft, fg: C.rHigh }
     : r.risk.level === "Medium" ? { bg: C.rMedSoft, fg: C.rMed }
     : { bg: C.rLowSoft, fg: C.rLow };
@@ -226,27 +217,27 @@ function drawKeyResults(doc: jsPDF, y: number, r: SimulationResult, p: Financial
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9.5);
   doc.setTextColor(...rc.fg);
-  doc.text(`Risk level: ${r.risk.level}`, M + 4, y + 6);
+  doc.text(t("pdf.riskLevel", { level: r.risk.level }), M + 4, y + 6);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
   doc.setTextColor(...C.muted);
-  const rrt = r.risk.reasons.join("  ");
+  const riskReasons = localizedRiskReasons(r, t);
+  const rrt = riskReasons.join("  ");
   const rrl = doc.splitTextToSize(rrt, CW - 70);
   doc.text(rrl, M + 65, y + 6);
   y += 13;
 
-  // KPI cards
   interface Kpi { label: string; value: string; hint?: string | undefined; tone?: [number, number, number] | undefined }
   const kpis: Kpi[] = [
-    { label: "Lowest month-end balance", value: vnd(r.lowestBalance), hint: r.lowestBalanceMonth ? `Month ${r.lowestBalanceMonth}` : undefined, tone: r.lowestBalance < 0 ? C.rHigh : r.lowestBalance < p.safetyBuffer ? C.rMed : C.rLow },
-    { label: "Ending balance", value: vnd(r.endingBalance), tone: r.endingBalance < 0 ? C.rHigh : r.endingBalance < p.safetyBuffer ? C.rMed : C.rLow },
-    { label: "Max monthly gap", value: vnd(r.maxMonthlyGap), hint: "Before using savings" },
-    { label: "Max reserve deficit", value: vnd(r.maxReserveDeficit), hint: "Shortfall below zero" },
-    { label: "Runway (zero income)", value: formatMonths(r.runwayMonthsZeroIncome) },
-    { label: "Minimum income needed", value: vnd(r.minimumIncomeNeeded), hint: "Essentials + debt/mo" },
+    { label: t("pdf.lowestBalance"), value: vnd(r.lowestBalance), hint: r.lowestBalanceMonth ? t("pdf.monthN", { n: r.lowestBalanceMonth }) : undefined, tone: r.lowestBalance < 0 ? C.rHigh : r.lowestBalance < p.safetyBuffer ? C.rMed : C.rLow },
+    { label: t("pdf.endingBalance"), value: vnd(r.endingBalance), tone: r.endingBalance < 0 ? C.rHigh : r.endingBalance < p.safetyBuffer ? C.rMed : C.rLow },
+    { label: t("pdf.maxMonthlyGap"), value: vnd(r.maxMonthlyGap), hint: t("pdf.beforeSavings") },
+    { label: t("pdf.maxReserveDeficit"), value: vnd(r.maxReserveDeficit), hint: t("pdf.shortfallBelowZero") },
+    { label: t("pdf.runwayZero"), value: r.runwayMonthsZeroIncome === Infinity ? t("format.unlimited") : t("format.monthsValue", { n: (Math.floor(r.runwayMonthsZeroIncome * 10) / 10).toFixed(1) }) },
+    { label: t("pdf.minIncomeNeeded"), value: vnd(r.minimumIncomeNeeded), hint: t("pdf.essentialsDebtMo") },
   ];
-  if (r.firstMonthBelowBuffer !== null) kpis.push({ label: "First month below buffer", value: `Month ${r.firstMonthBelowBuffer}`, tone: C.rMed });
-  if (r.firstNegativeMonth !== null) kpis.push({ label: "First negative month", value: `Month ${r.firstNegativeMonth}`, tone: C.rHigh });
+  if (r.firstMonthBelowBuffer !== null) kpis.push({ label: t("pdf.firstBelowBuffer"), value: t("pdf.monthN", { n: r.firstMonthBelowBuffer }), tone: C.rMed });
+  if (r.firstNegativeMonth !== null) kpis.push({ label: t("pdf.firstNegative"), value: t("pdf.monthN", { n: r.firstNegativeMonth }), tone: C.rHigh });
 
   const cardW = (CW - 8) / 3;
   const cardH = 15;
@@ -293,10 +284,8 @@ function drawKeyResults(doc: jsPDF, y: number, r: SimulationResult, p: Financial
   return y;
 }
 
-/* ── Section 5: Balance chart (vector) ── */
-
-function drawBalanceChart(doc: jsPDF, y: number, active: MonthProjection[], baseline: MonthProjection[], buffer: number, label: string): number {
-  y = secTitleKeep(doc, "Projected cash balance", y, 70);
+function drawBalanceChart(doc: jsPDF, y: number, active: MonthProjection[], baseline: MonthProjection[], buffer: number, label: string, t: T): number {
+  y = secTitleKeep(doc, t("pdf.projectedCashBalance"), y, 70);
   const ch = 52;
   y = ensure(doc, y, ch + 16);
 
@@ -325,9 +314,8 @@ function drawBalanceChart(doc: jsPDF, y: number, active: MonthProjection[], base
   const tY = (v: number) => cy + 3 + ih - ((v - lo) / sp) * ih;
   const tX = (m: number) => plotL + ((m - 1) / Math.max(1, active.length - 1)) * iw;
 
-  // Gridlines
-  for (let t = 0; t <= 4; t++) {
-    const v = lo + (sp * t) / 4;
+  for (let tt = 0; tt <= 4; tt++) {
+    const v = lo + (sp * tt) / 4;
     const gy = tY(v);
     doc.setDrawColor(...C.cGrid);
     doc.setLineWidth(0.2);
@@ -338,7 +326,6 @@ function drawBalanceChart(doc: jsPDF, y: number, active: MonthProjection[], base
     doc.text(vndS(v), cx + 30, gy + 1, { align: "right" });
   }
 
-  // Zero line
   if (lo < 0 && hi > 0) {
     const zy = tY(0);
     doc.setDrawColor(...C.cZero);
@@ -346,10 +333,9 @@ function drawBalanceChart(doc: jsPDF, y: number, active: MonthProjection[], base
     doc.line(plotL, zy, plotR, zy);
     doc.setFontSize(5.5);
     doc.setTextColor(...C.cZero);
-    doc.text("Zero", plotL + 1, zy - 1);
+    doc.text(t("pdf.zeroBalance"), plotL + 1, zy - 1);
   }
 
-  // Safety buffer line
   const by = tY(buffer);
   if (by >= cy + 3 && by <= cy + 3 + ih) {
     doc.setDrawColor(...C.cBuffer);
@@ -359,10 +345,9 @@ function drawBalanceChart(doc: jsPDF, y: number, active: MonthProjection[], base
     doc.setLineDashPattern([], 0);
     doc.setFontSize(5.5);
     doc.setTextColor(...C.cBuffer);
-    doc.text(`Buffer ${vndS(buffer)}`, plotR - 1, by - 1, { align: "right" });
+    doc.text(t("pdf.bufferShort", { amount: vndS(buffer) }), plotR - 1, by - 1, { align: "right" });
   }
 
-  // Baseline (dashed)
   doc.setDrawColor(...C.cBase);
   doc.setLineWidth(0.5);
   doc.setLineDashPattern([3, 2], 0);
@@ -373,7 +358,6 @@ function drawBalanceChart(doc: jsPDF, y: number, active: MonthProjection[], base
   }
   doc.setLineDashPattern([], 0);
 
-  // Active (solid)
   doc.setDrawColor(...C.cActive);
   doc.setLineWidth(0.8);
   for (let i = 1; i < active.length; i++) {
@@ -386,27 +370,23 @@ function drawBalanceChart(doc: jsPDF, y: number, active: MonthProjection[], base
     doc.circle(tX(m.month), tY(m.closingBalance), 0.7, "F");
   });
 
-  // X labels
   doc.setFont("helvetica", "normal");
   doc.setFontSize(5.5);
   doc.setTextColor(...C.muted);
   active.forEach(m => doc.text(`M${m.month}`, tX(m.month), cy + ch - 2.5, { align: "center" }));
 
-  // Legend
   const ly = cy + ch + 2;
   let lx = cx + 4;
   drawLeg(doc, lx, ly, C.cActive, label); lx += legW(doc, label) + 8;
-  drawLegDash(doc, lx, ly, C.cBase, "Baseline"); lx += legW(doc, "Baseline") + 8;
-  drawLegDash(doc, lx, ly, C.cBuffer, "Safety buffer"); lx += legW(doc, "Safety buffer") + 8;
-  drawLeg(doc, lx, ly, C.cZero, "Zero balance");
+  drawLegDash(doc, lx, ly, C.cBase, t("pdf.baseline")); lx += legW(doc, t("pdf.baseline")) + 8;
+  drawLegDash(doc, lx, ly, C.cBuffer, t("pdf.safetyBufferLabel")); lx += legW(doc, t("pdf.safetyBufferLabel")) + 8;
+  drawLeg(doc, lx, ly, C.cZero, t("pdf.zeroBalance"));
 
   return ly + 7;
 }
 
-/* ── Section 6: Income vs outflow chart ── */
-
-function drawIncomeOutflowChart(doc: jsPDF, y: number, months: MonthProjection[]): number {
-  y = secTitleKeep(doc, "Monthly income vs outflow", y, 64);
+function drawIncomeOutflowChart(doc: jsPDF, y: number, months: MonthProjection[], t: T): number {
+  y = secTitleKeep(doc, t("pdf.monthlyIncomeOutflow"), y, 64);
   const ch = 48;
   y = ensure(doc, y, ch + 14);
 
@@ -433,8 +413,8 @@ function drawIncomeOutflowChart(doc: jsPDF, y: number, months: MonthProjection[]
   const tY = (v: number) => cy + 3 + ih - ((v - lo) / sp) * ih;
   const tX = (m: number) => plotL + ((m - 1) / Math.max(1, months.length - 1)) * iw;
 
-  for (let t = 0; t <= 3; t++) {
-    const v = lo + (sp * t) / 3;
+  for (let tt = 0; tt <= 3; tt++) {
+    const v = lo + (sp * tt) / 3;
     const gy = tY(v);
     doc.setDrawColor(...C.cGrid);
     doc.setLineWidth(0.2);
@@ -445,7 +425,6 @@ function drawIncomeOutflowChart(doc: jsPDF, y: number, months: MonthProjection[]
     doc.text(vndS(v), cx + 30, gy + 1, { align: "right" });
   }
 
-  // Income
   doc.setDrawColor(...C.cIncome);
   doc.setLineWidth(0.8);
   for (let i = 1; i < months.length; i++) {
@@ -455,7 +434,6 @@ function drawIncomeOutflowChart(doc: jsPDF, y: number, months: MonthProjection[]
   }
   months.forEach(m => { doc.setFillColor(...C.cIncome); doc.circle(tX(m.month), tY(m.income), 0.6, "F"); });
 
-  // Outflow
   doc.setDrawColor(...C.cOutflow);
   doc.setLineWidth(0.8);
   for (let i = 1; i < months.length; i++) {
@@ -465,27 +443,23 @@ function drawIncomeOutflowChart(doc: jsPDF, y: number, months: MonthProjection[]
   }
   months.forEach(m => { doc.setFillColor(...C.cOutflow); doc.circle(tX(m.month), tY(m.outflow), 0.6, "F"); });
 
-  // X labels
   doc.setFont("helvetica", "normal");
   doc.setFontSize(5.5);
   doc.setTextColor(...C.muted);
   months.forEach(m => doc.text(`M${m.month}`, tX(m.month), cy + ch - 2.5, { align: "center" }));
 
-  // Legend
   const ly = cy + ch + 2;
   let lx = cx + 4;
-  drawLeg(doc, lx, ly, C.cIncome, "Income (adjusted)"); lx += legW(doc, "Income (adjusted)") + 8;
-  drawLeg(doc, lx, ly, C.cOutflow, "Outflow");
+  drawLeg(doc, lx, ly, C.cIncome, t("pdf.incomeAdjusted")); lx += legW(doc, t("pdf.incomeAdjusted")) + 8;
+  drawLeg(doc, lx, ly, C.cOutflow, t("pdf.outflow"));
 
   return ly + 7;
 }
 
-/* ── Section 7: Monthly table ── */
+function drawMonthlyTable(doc: jsPDF, y: number, months: MonthProjection[], t: T): number {
+  y = secTitleKeep(doc, t("pdf.monthlyCashFlow"), y, 18);
 
-function drawMonthlyTable(doc: jsPDF, y: number, months: MonthProjection[]): number {
-  y = secTitleKeep(doc, "Monthly cash-flow projection", y, 18);
-
-  const headers = ["Mo.", "Income", "Outflow", "Net flow", "Closing balance", "Status"];
+  const headers = [t("pdf.colMonth"), t("pdf.colIncome"), t("pdf.colOutflow"), t("pdf.colNetFlow"), t("pdf.colClosing"), t("pdf.colStatus")];
   const colW = [13, 31, 31, 31, 38, 30];
   const tw = colW.reduce((a, b) => a + b, 0);
   const rh = 6;
@@ -525,7 +499,7 @@ function drawMonthlyTable(doc: jsPDF, y: number, months: MonthProjection[]): num
       vnd(m.outflow),
       (m.netCashFlow >= 0 ? "+" : "") + vnd(Math.abs(m.netCashFlow)),
       vnd(m.closingBalance),
-      m.negative ? "Negative" : m.belowBuffer ? "Below buffer" : "Above buffer",
+      m.negative ? t("pdf.statusNegative") : m.belowBuffer ? t("pdf.statusBelow") : t("pdf.statusAbove"),
     ];
 
     let x = M + 2;
@@ -547,51 +521,44 @@ function drawMonthlyTable(doc: jsPDF, y: number, months: MonthProjection[]): num
   return y + 6;
 }
 
-/* ── Section 8: Recommendations ── */
-
-function drawRecommendations(doc: jsPDF, y: number, recs: Recommendation[]): number {
-  y = secTitleKeep(doc, "Recommended next steps", y, 24);
+function drawRecommendations(doc: jsPDF, y: number, recs: Recommendation[], t: T): number {
+  y = secTitleKeep(doc, t("pdf.recommendedNextSteps"), y, 24);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
   doc.setTextColor(...C.muted);
-  const sub = "Generated from your simulation results using fixed rules, not AI. Not financial advice.";
+  const sub = t("pdf.recIntro");
   const sl = doc.splitTextToSize(sub, CW);
   doc.text(sl, M, y);
   y += (sl.length as number) * LH_S + 3;
 
   if (recs.length === 0) {
-    y = body(doc, "Your projection is stable — no balance falls below your safety buffer within this horizon. No specific recommendation is needed based on the data entered.", y);
+    y = body(doc, t("pdf.stableProjection"), y);
     return y + 4;
   }
 
-  // Indent for recommendation content — extra padding from page margins
-  const RX = M + 3;          // left edge of rec content
-  const RW = CW - 6;          // writable width inside rec card
-  const BW = RW - 6;          // bullet/numbered text wrap width
+  const RX = M + 3;
+  const RW = CW - 6;
+  const BW = RW - 6;
 
   for (let ri = 0; ri < recs.length; ri++) {
     const rec = recs[ri]!;
     const pc = rec.priority === "High" ? C.rHigh : rec.priority === "Medium" ? C.rMed : C.rLow;
 
-    // Estimate total height of this recommendation to decide whether to page-break
     const estH = estimateRecHeight(doc, rec, RW, BW);
     const availSpace = PH - M - 10 - y;
-    // If less than 40% of the rec fits on the current page, start fresh
     if (availSpace < estH * 0.4 && availSpace < 40) {
       doc.addPage();
       y = M;
     }
     y = ensure(doc, y, 20);
 
-    // Title (wrap with room for priority badge)
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9.5);
     doc.setTextColor(...C.text);
     const tl = doc.splitTextToSize(rec.title, RW - 26);
     doc.text(tl, RX, y + 4);
 
-    // Priority badge
-    const pl = `${rec.priority} priority`;
+    const pl = t("pdf.priorityBadge", { priority: localizedPriorityLabel(rec.priority, t) });
     const pw = doc.getTextWidth(pl) + 6;
     doc.setFillColor(...pc);
     doc.roundedRect(M + CW - pw - 2, y + 0.5, pw, 5, 1, 1, "F");
@@ -602,8 +569,7 @@ function drawRecommendations(doc: jsPDF, y: number, recs: Recommendation[]): num
 
     y += (tl.length as number) * LH + 2;
 
-    // Why selected
-    y = subH2(doc, "Why this was selected", y, RX);
+    y = subH2(doc, t("pdf.whySelected"), y, RX);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.5);
     doc.setTextColor(...C.text);
@@ -615,8 +581,7 @@ function drawRecommendations(doc: jsPDF, y: number, recs: Recommendation[]): num
     }
     y += 2;
 
-    // Action steps
-    y = subH2(doc, "Action steps", y, RX);
+    y = subH2(doc, t("pdf.actionSteps"), y, RX);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.5);
     doc.setTextColor(...C.text);
@@ -628,8 +593,7 @@ function drawRecommendations(doc: jsPDF, y: number, recs: Recommendation[]): num
     });
     y += 2;
 
-    // Expected impact
-    y = subH2(doc, "Expected impact", y, RX);
+    y = subH2(doc, t("pdf.expectedImpact"), y, RX);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.5);
     doc.setTextColor(...C.text);
@@ -642,14 +606,13 @@ function drawRecommendations(doc: jsPDF, y: number, recs: Recommendation[]): num
       doc.setFont("helvetica", "italic");
       doc.setFontSize(7);
       doc.setTextColor(...C.rMed);
-      const nl = doc.splitTextToSize("This impact cannot be quantified by the current simulation engine.", BW);
+      const nl = doc.splitTextToSize(t("ap.impactNotQuantified"), BW);
       doc.text(nl, RX + 3, y);
       y += (nl.length as number) * LH_S;
     }
 
-    // Limitations
     if (rec.limitations.length > 0) {
-      y = subH2(doc, "Limitations", y, RX);
+      y = subH2(doc, t("pdf.limitations"), y, RX);
       doc.setFont("helvetica", "normal");
       doc.setFontSize(7);
       doc.setTextColor(...C.muted);
@@ -661,10 +624,9 @@ function drawRecommendations(doc: jsPDF, y: number, recs: Recommendation[]): num
       }
     }
 
-    // Missing info
     if (rec.missingInformation.length > 0) {
       y += 1;
-      y = subH2(doc, "Information needed", y, RX);
+      y = subH2(doc, t("pdf.informationNeeded"), y, RX);
       doc.setFont("helvetica", "normal");
       doc.setFontSize(7);
       doc.setTextColor(...C.muted);
@@ -676,7 +638,6 @@ function drawRecommendations(doc: jsPDF, y: number, recs: Recommendation[]): num
       }
     }
 
-    // Thin horizontal divider between recommendations (not after the last one)
     if (ri < recs.length - 1) {
       y += 3;
       doc.setDrawColor(...C.border);
@@ -691,15 +652,12 @@ function drawRecommendations(doc: jsPDF, y: number, recs: Recommendation[]): num
   return y;
 }
 
-/* ── Footer: disclaimer + page numbers ── */
-
-function drawFooter(doc: jsPDF): void {
+function drawFooter(doc: jsPDF, t: T): void {
   const pc = doc.getNumberOfPages();
   for (let p = 1; p <= pc; p++) {
     doc.setPage(p);
     let y = PH - M - 8;
     if (p === pc) {
-      // Disclaimer on last page
       y = ensure(doc, y, 16);
       doc.setDrawColor(...C.border);
       doc.setLineWidth(0.4);
@@ -708,19 +666,16 @@ function drawFooter(doc: jsPDF): void {
       doc.setFont("helvetica", "italic");
       doc.setFontSize(6.5);
       doc.setTextColor(...C.muted);
-      const disc = "This report is generated by SafeFlow AI from the numbers you entered. Projections are mechanical estimates, not guarantees. Recommendations are produced by fixed rules, not AI, and are not financial advice. Real-world results depend on factors a simulation cannot capture. Consult a qualified financial advisor before making decisions.";
+      const disc = t("pdf.disclaimer");
       const dl = doc.splitTextToSize(disc, CW);
       doc.text(dl, M, y);
     }
-    // Page number
     doc.setFont("helvetica", "normal");
     doc.setFontSize(6.5);
     doc.setTextColor(...C.lightMuted);
-    doc.text(`SafeFlow AI — Cash-flow resilience report  |  Page ${p} of ${pc}`, PW - M, PH - 5, { align: "right" });
+    doc.text(t("pdf.pageFooter", { p, pc }), PW - M, PH - 5, { align: "right" });
   }
 }
-
-/* ── Helpers ── */
 
 function ensure(doc: jsPDF, y: number, needed: number): number {
   if (y + needed > PH - M - 10) { doc.addPage(); return M; }
@@ -748,15 +703,6 @@ function secTitleKeep(doc: jsPDF, title: string, y: number, minContent: number):
   return secTitle(doc, title, y);
 }
 
-function subH(doc: jsPDF, text: string, y: number): number {
-  y = ensure(doc, y, LH_S + 1);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(7.5);
-  doc.setTextColor(...C.muted);
-  doc.text(text, M, y);
-  return y + LH_S;
-}
-
 function subH2(doc: jsPDF, text: string, y: number, x: number): number {
   y = ensure(doc, y, LH_S + 1);
   doc.setFont("helvetica", "bold");
@@ -768,29 +714,24 @@ function subH2(doc: jsPDF, text: string, y: number, x: number): number {
 
 function estimateRecHeight(doc: jsPDF, rec: Recommendation, rw: number, bw: number): number {
   let h = 0;
-  // Title
   const tl = doc.splitTextToSize(rec.title, rw - 26);
   h += (tl.length as number) * LH + 2;
-  // Why selected heading + reasons
   h += LH_S;
   for (const r of rec.triggerReasons) {
     const rl = doc.splitTextToSize(`\u2022  ${r}`, bw);
     h += (rl.length as number) * LH_S;
   }
   h += 2;
-  // Action steps heading + steps
   h += LH_S;
   for (const s of rec.actionSteps) {
     const rl = doc.splitTextToSize(`1.  ${s.text}`, bw);
     h += (rl.length as number) * LH_S;
   }
   h += 2;
-  // Expected impact heading + text
   h += LH_S;
   const il = doc.splitTextToSize(rec.expectedImpact, bw);
   h += (il.length as number) * LH_S + 1;
   if (rec.impactStatus === "not_quantified") h += LH_S;
-  // Limitations
   if (rec.limitations.length > 0) {
     h += LH_S;
     for (const l of rec.limitations) {
@@ -798,7 +739,6 @@ function estimateRecHeight(doc: jsPDF, rec: Recommendation, rw: number, bw: numb
       h += (rl.length as number) * LH_S;
     }
   }
-  // Missing info
   if (rec.missingInformation.length > 0) {
     h += 1 + LH_S;
     for (const info of rec.missingInformation) {
@@ -806,7 +746,7 @@ function estimateRecHeight(doc: jsPDF, rec: Recommendation, rw: number, bw: numb
       h += (rl.length as number) * LH_S;
     }
   }
-  h += 8; // padding + border
+  h += 8;
   return h;
 }
 
@@ -861,5 +801,3 @@ function drawLegDash(doc: jsPDF, x: number, y: number, color: [number, number, n
 function legW(doc: jsPDF, label: string): number {
   return 7 + doc.getTextWidth(label) + 3;
 }
-
-

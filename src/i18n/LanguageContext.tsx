@@ -30,11 +30,14 @@ import {
 
 const STORAGE_KEY = "safeflow:lang";
 
+/** The translate function signature, reused by localized content modules. */
+export type TranslateFn = (key: TranslationKey, params?: Record<string, string | number>) => string;
+
 interface LanguageContextValue {
   language: Language;
   setLanguage: (lang: Language) => void;
   /** Translate a key with optional {param} interpolation. Falls back to English. */
-  t: (key: TranslationKey, params?: Record<string, string | number>) => string;
+  t: TranslateFn;
 }
 
 const LanguageContext = createContext<LanguageContextValue | null>(null);

@@ -1,17 +1,20 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
+import { useT } from "@/i18n/LanguageContext";
+import type { TranslationKey } from "@/i18n/translations";
 
-const steps = [
-  { to: "/simulate/input", label: "Profile & Scenario" },
-  { to: "/simulate/dashboard", label: "Risk Dashboard" },
-  { to: "/simulate/action-plan", label: "Action Plan" },
+const steps: { to: string; label: TranslationKey }[] = [
+  { to: "/simulate/input", label: "stepper.profile" },
+  { to: "/simulate/dashboard", label: "stepper.dashboard" },
+  { to: "/simulate/action-plan", label: "stepper.actionPlan" },
 ] as const;
 
 export function SimulateStepper() {
+  const t = useT();
   const path = useRouterState({ select: (s) => s.location.pathname });
   const current = steps.findIndex((s) => path.startsWith(s.to));
   return (
-    <nav aria-label="Simulation steps" className="border-b bg-card">
+    <nav aria-label={t("stepper.ariaLabel")} className="border-b bg-card">
       <ol className="mx-auto flex max-w-6xl gap-2 overflow-x-auto px-4 py-3 sm:px-6">
         {steps.map((s, i) => (
           <li key={s.to} className="flex shrink-0 items-center gap-2">
@@ -31,7 +34,7 @@ export function SimulateStepper() {
               >
                 {i + 1}
               </span>
-              {s.label}
+              {t(s.label)}
             </Link>
             {i < steps.length - 1 && <span aria-hidden className="h-px w-6 bg-border" />}
           </li>

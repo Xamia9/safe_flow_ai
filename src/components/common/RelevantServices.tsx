@@ -2,12 +2,14 @@ import { useState } from "react";
 import { ChevronDown, ExternalLink } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
-import { TRANSPARENCY_NOTE, getServicesForSolution } from "@/lib/relevantServices";
+import { getLocalizedServicesForSolution } from "@/lib/relevantServicesLocalized";
 import type { SolutionId } from "@/lib/recommendations";
 import { cn } from "@/lib/utils";
+import { useT } from "@/i18n/LanguageContext";
 
 export function RelevantServices({ solutionId }: { solutionId: SolutionId }) {
-  const category = getServicesForSolution(solutionId);
+  const t = useT();
+  const category = getLocalizedServicesForSolution(solutionId, t);
   const [open, setOpen] = useState(false);
   if (!category || category.services.length === 0) return null;
 
@@ -15,7 +17,7 @@ export function RelevantServices({ solutionId }: { solutionId: SolutionId }) {
     <Collapsible open={open} onOpenChange={setOpen} className="mt-3">
       <CollapsibleTrigger asChild>
         <Button type="button" variant="ghost" size="sm" className="w-full justify-between px-2 text-xs font-medium text-muted-foreground hover:text-foreground">
-          <span>Explore Relevant Services</span>
+          <span>{t("services.explore")}</span>
           <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} aria-hidden />
         </Button>
       </CollapsibleTrigger>
@@ -39,7 +41,7 @@ export function RelevantServices({ solutionId }: { solutionId: SolutionId }) {
             </li>
           ))}
         </ul>
-        <p className="text-xs italic text-muted-foreground">{TRANSPARENCY_NOTE}</p>
+        <p className="text-xs italic text-muted-foreground">{t("services.transparency")}</p>
       </CollapsibleContent>
     </Collapsible>
   );

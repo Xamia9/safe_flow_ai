@@ -4,17 +4,23 @@ import { afterEach, describe, expect, it } from "vitest";
 import { AmountField } from "./AmountField";
 import { parseAmount, parseProfileDraft } from "@/lib/validation";
 import { resetSimulation, setDraftValue, useSimulation } from "@/services/simulationStore";
+import { LanguageProvider } from "@/i18n/LanguageContext";
 
 afterEach(() => { cleanup(); resetSimulation(); });
+
+function withProvider(ui: React.ReactElement) {
+  return render(<LanguageProvider>{ui}</LanguageProvider>);
+}
 
 function Field({ initial = "" }: { initial?: string }) {
   const [value, setValue] = useState(initial);
   return <><AmountField id="amount" label="Amount" value={value} onChange={setValue} /><output>{value}</output></>;
 }
 
+
 describe("monthly amount input", () => {
   it("does not insert thousands separators while typing", () => {
-    render(<Field />);
+    withProvider(<Field />);
     const input = screen.getByRole("textbox") as HTMLInputElement;
     for (const d of "10000000") {
       fireEvent.change(input, { target: { value: input.value + d } });
@@ -23,13 +29,13 @@ describe("monthly amount input", () => {
   });
 
   it("preserves digits without reformatting", () => {
-    render(<Field initial="123456789" />);
+    withProvider(<Field initial="123456789" />);
     const input = screen.getByRole("textbox") as HTMLInputElement;
     expect(input.value).toBe("123456789");
   });
 
   it("retains user-entered commas in the display", () => {
-    render(<Field />);
+    withProvider(<Field />);
     const input = screen.getByRole("textbox") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "10,000,000" } });
     expect(input.value).toBe("10,000,000");
@@ -48,7 +54,7 @@ describe("monthly amount input", () => {
   });
 
   it("allows empty and zero and preserves invalid values for validation", () => {
-    render(<Field initial="1000000" />);
+    withProvider(<Field initial="1000000" />);
     const input = screen.getByRole("textbox");
     for (const value of ["", "0", "-1", "oops"]) {
       fireEvent.change(input, { target: { value } });
@@ -62,7 +68,7 @@ describe("monthly amount input", () => {
       return <AmountField id="stored" label="Income" value={draft["monthlyIncome"] ?? ""}
         onChange={(value) => setDraftValue("monthlyIncome", value)} />;
     }
-    render(<StoredField />);
+    withProvider(<StoredField />);
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "123,456,789" } });
     const saved = JSON.parse(localStorage.getItem("safeflow:v1") ?? "{}");
     expect(saved.draft.monthlyIncome).toBe("123,456,789");
@@ -79,7 +85,7 @@ describe("monthly amount input", () => {
   };
 
   it("handles long numbers without separators", () => {
-    render(<Field />);
+    withProvider(<Field />);
     const input = screen.getByRole("textbox") as HTMLInputElement;
     type(input, "10000000");
     expect(input.value).toBe("10000000");
@@ -91,7 +97,7 @@ describe("monthly amount input", () => {
   });
 
   it("clears and re-enters values without digits reappearing", () => {
-    render(<Field initial="10000000" />);
+    withProvider(<Field initial="10000000" />);
     const input = screen.getByRole("textbox") as HTMLInputElement;
     type(input, "");
     expect(input.value).toBe("");
@@ -101,7 +107,7 @@ describe("monthly amount input", () => {
   });
 
   it("allows editing commas and digits without the displayed string changing", () => {
-    render(<Field initial="1,000,000" />);
+    withProvider(<Field initial="1,000,000" />);
     const input = screen.getByRole("textbox") as HTMLInputElement;
     // Delete a comma in the middle — display should reflect exactly what was typed
     type(input, "1000,000");
@@ -112,7 +118,7 @@ describe("monthly amount input", () => {
   });
 
   it("replaces a value with a pasted comma-formatted long number", () => {
-    render(<Field initial="123456" />);
+    withProvider(<Field initial="123456" />);
     const input = screen.getByRole("textbox") as HTMLInputElement;
     type(input, "1,234,567,890");
     expect(input.value).toBe("1,234,567,890");
@@ -124,7 +130,7 @@ describe("monthly amount input", () => {
       const [value, setValue] = useState("1234");
       return <><AmountField id="a" label="A" value={value} onChange={setValue} /><button onClick={() => setValue("")}>reset</button></>;
     }
-    render(<Resettable />);
+    withProvider(<Resettable />);
     const input = screen.getByRole("textbox") as HTMLInputElement;
     expect(input.value).toBe("1234");
     fireEvent.click(screen.getByRole("button"));

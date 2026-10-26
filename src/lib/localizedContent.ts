@@ -9,9 +9,7 @@ import type { FinancialProfile, Scenario, SimulationResult } from "@/types/finan
 import { usesReduction, usesExpense } from "./scenarioUpdates";
 import { formatAmount } from "./formatCurrencyLocalized";
 import type { TranslationKey } from "@/i18n/translations";
-import type { t as TFn } from "@/i18n/LanguageContext";
-
-type T = typeof TFn;
+import type { TranslateFn as T } from "@/i18n/LanguageContext";
 
 /** Localized risk level label, e.g. "Low risk" / "Rủi ro thấp". */
 export function riskLevelLabel(level: "Low" | "Medium" | "High", t: T): string {

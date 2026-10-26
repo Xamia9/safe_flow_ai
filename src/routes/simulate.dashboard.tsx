@@ -11,13 +11,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { compareScenarios } from "@/lib/financialCalculations";
-import { formatMonths, formatVND } from "@/lib/formatCurrency";
+import { formatVND } from "@/lib/formatCurrency";
+import { formatMonthsLocalized } from "@/lib/formatCurrencyLocalized";
 import { parseAmount } from "@/lib/validation";
 import {
-  describeScenario, resetScenario, setDuration, setExpense, setReductionPct, usesExpense, usesReduction,
+  resetScenario, setDuration, setExpense, setReductionPct, usesExpense, usesReduction,
+  describeScenario,
 } from "@/lib/scenarioUpdates";
+import {
+  localizedAffectedMonths, localizedRiskReasons, localizedScenarioLabel,
+} from "@/lib/localizedContent";
 import { setSimulation, useSimulation } from "@/services/simulationStore";
 import { cn } from "@/lib/utils";
+import { useT, useLanguage } from "@/i18n/LanguageContext";
 import { useAiExplain } from "@/hooks/useAiExplain";
 import { buildExplainResultsContext } from "@/lib/ai/contextBuilder";
 import type { FinancialProfile, Scenario } from "@/types/financial";
@@ -37,24 +43,25 @@ export const Route = createFileRoute("/simulate/dashboard")({
   component: Dashboard,
 });
 
-const NONE = "Not projected within this horizon";
-const monthOr = (m: number | null) => (m ? `Month ${m}` : NONE);
-
 function Dashboard() {
+  const t = useT();
+  const { language } = useLanguage();
   const { profile, scenario } = useSimulation();
   const ai = useAiExplain();
   if (!profile) {
     return (
       <div className="space-y-8">
-        <PageHeader eyebrow="Step 2" title="Risk dashboard" />
-        <EmptyState icon={ClipboardList} title="No simulation yet"
-          description="Complete your financial profile and scenario to see your projected balances and risk level."
-          action={<Button asChild><Link to="/simulate/input">Go to profile</Link></Button>} />
+        <PageHeader eyebrow={t("dash.eyebrow")} title={t("dash.title")} />
+        <EmptyState icon={ClipboardList} title={t("dash.noSimTitle")}
+          description={t("dash.noSimBody")}
+          action={<Button asChild><Link to="/simulate/input">{t("dash.goToProfile")}</Link></Button>} />
       </div>
     );
   }
   const { baseline, active, deltaLowestBalance } = compareScenarios(profile, scenario);
-  const summary = describeScenario(scenario);
+  const scenarioLabel = localizedScenarioLabel(scenario, t);
+  const affectedMonths = localizedAffectedMonths(scenario, t);
+  const riskReasons = localizedRiskReasons(active, t);
   const tone = (v: number): "negative" | "warning" | "default" => (v < 0 ? "negative" : v < profile.safetyBuffer ? "warning" : "default");
   const setSc = (s: Scenario) => setSimulation({ scenario: s });
 
@@ -65,36 +72,40 @@ function Dashboard() {
   useEffect(() => { setExpanded(false); }, [totalMonths]);
   const visibleMonths = canCollapse && !expanded ? active.months.slice(0, COLLAPSE_THRESHOLD) : active.months;
 
+  const monthOr = (m: number | null) => (m ? t("dash.monthN", { n: m }) : t("dash.notProjected"));
+
   const handleExplain = () => {
-    const ctx = buildExplainResultsContext(profile, scenario, active, summary);
-    ai.call("explain_results", ctx);
+    const ctx = buildExplainResultsContext(profile, scenario, active, describeScenario(scenario));
+    ai.call("explain_results", ctx, language);
   };
+
+  const tableHeaders = [t("dash.colMonth"), t("dash.colIncomeAdj"), t("dash.colEssentials"), t("dash.colDebt"), t("dash.colFlexible"), t("dash.colUnexpected"), t("dash.colNetFlow"), t("dash.colEnding"), t("dash.colBufferStatus")];
 
   return (
     <div className="space-y-8">
-      <PageHeader eyebrow="Step 2" title="Risk dashboard"
-        description="Projections based on your inputs and assumptions — not historical or actual transactions."
-        actions={<Button asChild variant="outline"><Link to="/simulate/input">Edit Financial Profile</Link></Button>} />
+      <PageHeader eyebrow={t("dash.eyebrow")} title={t("dash.title")}
+        description={t("dash.description")}
+        actions={<Button asChild variant="outline"><Link to="/simulate/input">{t("dash.editProfile")}</Link></Button>} />
 
       <section className="rounded-xl border bg-card p-6" aria-labelledby="sum-h">
         <div className="flex flex-wrap items-center gap-3">
-          <h2 id="sum-h" className="sr-only">Risk summary</h2>
+          <h2 id="sum-h" className="sr-only">{t("dash.riskSummary")}</h2>
           <RiskBadge level={active.risk.level} />
-          <span className="text-sm text-muted-foreground">Rule-based rating, not a probability.</span>
+          <span className="text-sm text-muted-foreground">{t("dash.ruleBased")}</span>
         </div>
         <ul className="mt-3 list-disc pl-5 text-sm">
-          {active.risk.reasons.map((r) => <li key={r}>{r}</li>)}
+          {riskReasons.map((r) => <li key={r}>{r}</li>)}
         </ul>
         <dl className="mt-4 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2 lg:grid-cols-5">
-          <Item k="Scenario" v={summary.label} />
-          <Item k="Horizon" v={`${summary.horizon} months`} />
-          {summary.reductionPct !== null && <Item k="Income reduction" v={`${summary.reductionPct}%`} />}
-          {summary.affectedMonths && <Item k="Affected months" v={summary.affectedMonths} />}
-          {summary.expenses.length === 1 && summary.expenses[0] && (
-            <Item k="Unexpected expense" v={`${formatVND(summary.expenses[0].amount)} in month ${summary.expenses[0].month}`} />
+          <Item k={t("dash.scenario")} v={scenarioLabel} />
+          <Item k={t("dash.horizon")} v={t("dash.horizonValue", { n: scenario.horizon })} />
+          {scenario.incomeReductionPct > 0 && <Item k={t("dash.incomeReduction")} v={`${scenario.incomeReductionPct}%`} />}
+          {affectedMonths && <Item k={t("dash.affectedMonths")} v={affectedMonths} />}
+          {scenario.unexpectedExpenses.length === 1 && scenario.unexpectedExpenses[0] && (
+            <Item k={t("dash.unexpectedExpense")} v={t("dash.unexpectedExpenseInMonth", { amount: formatVND(scenario.unexpectedExpenses[0].amount), n: scenario.unexpectedExpenses[0].month })} />
           )}
-          {summary.expenses.length > 1 && (
-            <Item k="Unexpected expenses" v={summary.expenses.map((e) => `${formatVND(e.amount)} (m${e.month})`).join(" · ")} />
+          {scenario.unexpectedExpenses.length > 1 && (
+            <Item k={t("dash.unexpectedExpenses")} v={scenario.unexpectedExpenses.map((e) => `${formatVND(e.amount)} (m${e.month})`).join(" · ")} />
           )}
         </dl>
       </section>
@@ -103,49 +114,49 @@ function Dashboard() {
         <Controls scenario={scenario} profile={profile} onChange={setSc} />
       )}
 
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-label="Key figures">
-        <StatCard label="Projected ending balance" value={formatVND(active.endingBalance)} tone={tone(active.endingBalance)} />
-        <StatCard label="Lowest month-end balance" value={formatVND(active.lowestBalance)} tone={tone(active.lowestBalance)}
-          hint={active.lowestBalanceMonth ? `Month ${active.lowestBalanceMonth}` : undefined} />
-        <StatCard label="First month below safety buffer" value={monthOr(active.firstMonthBelowBuffer)}
-          tone={active.firstMonthBelowBuffer ? "warning" : "positive"} hint={`Buffer ${formatVND(profile.safetyBuffer)} (essentials + debt)`} />
-        <StatCard label="First negative-balance month" value={monthOr(active.firstNegativeMonth)}
-          tone={active.firstNegativeMonth ? "negative" : "positive"} hint="Savings fully used up" />
-        <StatCard label="Max reserve deficit" value={formatVND(active.maxReserveDeficit)} tone={active.maxReserveDeficit > 0 ? "warning" : "default"}
-          hint="Largest shortfall below zero when the balance goes negative" />
-        <StatCard label="Max monthly cash-flow gap" value={formatVND(active.maxMonthlyGap)} tone={active.maxMonthlyGap > 0 ? "warning" : "default"}
-          hint="Before using savings — a gap is not running out of money" />
-        <StatCard label="Runway with zero income" value={formatMonths(active.runwayMonthsZeroIncome)} hint="Savings ÷ (essentials + debt)" />
-        <StatCard label="Minimum income needed" value={formatVND(active.minimumIncomeNeeded)} hint="Essentials + mandatory debt per month" />
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-label={t("dash.riskSummary")}>
+        <StatCard label={t("dash.projectedEnding")} value={formatVND(active.endingBalance)} tone={tone(active.endingBalance)} />
+        <StatCard label={t("dash.lowestBalance")} value={formatVND(active.lowestBalance)} tone={tone(active.lowestBalance)}
+          hint={active.lowestBalanceMonth ? t("dash.monthN", { n: active.lowestBalanceMonth }) : undefined} />
+        <StatCard label={t("dash.firstBelowBuffer")} value={monthOr(active.firstMonthBelowBuffer)}
+          tone={active.firstMonthBelowBuffer ? "warning" : "positive"} hint={t("dash.bufferHint", { amount: formatVND(profile.safetyBuffer) })} />
+        <StatCard label={t("dash.firstNegative")} value={monthOr(active.firstNegativeMonth)}
+          tone={active.firstNegativeMonth ? "negative" : "positive"} hint={t("dash.savingsUsedUp")} />
+        <StatCard label={t("dash.maxDeficit")} value={formatVND(active.maxReserveDeficit)} tone={active.maxReserveDeficit > 0 ? "warning" : "default"}
+          hint={t("dash.maxDeficitHint")} />
+        <StatCard label={t("dash.maxGap")} value={formatVND(active.maxMonthlyGap)} tone={active.maxMonthlyGap > 0 ? "warning" : "default"}
+          hint={t("dash.maxGapHint")} />
+        <StatCard label={t("dash.runwayZero")} value={formatMonthsLocalized(active.runwayMonthsZeroIncome, t)} hint={t("dash.runwayHint")} />
+        <StatCard label={t("dash.minIncome")} value={formatVND(active.minimumIncomeNeeded)} hint={t("dash.minIncomeHint")} />
       </section>
 
       <section className="rounded-xl border bg-card p-6">
-        <h2 className="text-lg font-semibold">Projected Cash Balance</h2>
-        <p className="text-xs text-muted-foreground">Month-end projections, not actual transactions.</p>
-        <div className="mt-4"><BalanceChart active={active.months} baseline={baseline.months} buffer={profile.safetyBuffer} scenarioLabel={summary.label} /></div>
+        <h2 className="text-lg font-semibold">{t("dash.projectedCashBalance")}</h2>
+        <p className="text-xs text-muted-foreground">{t("dash.projectionNote")}</p>
+        <div className="mt-4"><BalanceChart active={active.months} baseline={baseline.months} buffer={profile.safetyBuffer} scenarioLabel={scenarioLabel} /></div>
       </section>
 
       <section className="overflow-x-auto rounded-xl border bg-card" aria-labelledby="cmp-h">
         <table className="w-full text-sm tabular">
-          <caption id="cmp-h" className="p-4 text-left font-display text-lg font-semibold">Scenario comparison</caption>
+          <caption id="cmp-h" className="p-4 text-left font-display text-lg font-semibold">{t("dash.scenarioComparison")}</caption>
           <thead className="bg-secondary text-left text-xs uppercase text-muted-foreground">
-            <tr><th scope="col" className="px-4 py-2">Measure</th><th scope="col" className="px-4 py-2">Baseline</th><th scope="col" className="px-4 py-2">{summary.label}</th></tr>
+            <tr><th scope="col" className="px-4 py-2">{t("dash.measure")}</th><th scope="col" className="px-4 py-2">{t("dash.baseline")}</th><th scope="col" className="px-4 py-2">{scenarioLabel}</th></tr>
           </thead>
           <tbody>
-            <Row k="Ending balance" a={formatVND(baseline.endingBalance)} b={formatVND(active.endingBalance)} />
-            <Row k="Lowest balance" a={formatVND(baseline.lowestBalance)} b={formatVND(active.lowestBalance)} />
-            <Row k="First safety-buffer breach" a={monthOr(baseline.firstMonthBelowBuffer)} b={monthOr(active.firstMonthBelowBuffer)} />
-            <Row k="First negative-balance month" a={monthOr(baseline.firstNegativeMonth)} b={monthOr(active.firstNegativeMonth)} />
-            <Row k="Change in lowest balance vs baseline" a="—" b={`${deltaLowestBalance > 0 ? "+" : ""}${formatVND(deltaLowestBalance)}`} />
+            <Row k={t("dash.endingBalance")} a={formatVND(baseline.endingBalance)} b={formatVND(active.endingBalance)} />
+            <Row k={t("dash.lowestBalanceRow")} a={formatVND(baseline.lowestBalance)} b={formatVND(active.lowestBalance)} />
+            <Row k={t("dash.firstBufferBreach")} a={monthOr(baseline.firstMonthBelowBuffer)} b={monthOr(active.firstMonthBelowBuffer)} />
+            <Row k={t("dash.firstNegativeRow")} a={monthOr(baseline.firstNegativeMonth)} b={monthOr(active.firstNegativeMonth)} />
+            <Row k={t("dash.changeLowestVsBaseline")} a="—" b={`${deltaLowestBalance > 0 ? "+" : ""}${formatVND(deltaLowestBalance)}`} />
           </tbody>
         </table>
       </section>
 
       <section className="overflow-x-auto rounded-xl border bg-card" tabIndex={0} aria-labelledby="tbl-h">
         <table className="w-full min-w-[960px] text-sm tabular">
-          <caption id="tbl-h" className="p-4 text-left font-display text-lg font-semibold">Monthly projection</caption>
+          <caption id="tbl-h" className="p-4 text-left font-display text-lg font-semibold">{t("dash.monthlyProjection")}</caption>
           <thead className="bg-secondary text-left text-xs uppercase text-muted-foreground">
-            <tr>{["Month", "Income (adjusted)", "Essentials", "Debt payment", "Flexible", "Unexpected", "Net cash flow", "Ending balance", "Buffer status"].map((h) => <th key={h} scope="col" className="px-3 py-2">{h}</th>)}</tr>
+            <tr>{tableHeaders.map((h) => <th key={h} scope="col" className="px-3 py-2">{h}</th>)}</tr>
           </thead>
           <tbody>
             {visibleMonths.map((m) => (
@@ -159,7 +170,7 @@ function Dashboard() {
                 <td className={cn("px-3 py-2", m.netCashFlow < 0 && "text-negative")}>{formatVND(m.netCashFlow)}</td>
                 <td className={cn("px-3 py-2 font-medium", m.negative ? "text-negative" : m.belowBuffer && "text-warning")}>{formatVND(m.closingBalance)}</td>
                 <td className={cn("px-3 py-2", m.negative ? "text-negative" : m.belowBuffer ? "text-warning" : "text-teal")}>
-                  {m.negative ? "Negative balance" : m.belowBuffer ? "Below buffer" : "Above buffer"}
+                  {m.negative ? t("dash.statusNegative") : m.belowBuffer ? t("dash.statusBelow") : t("dash.statusAbove")}
                 </td>
               </tr>
             ))}
@@ -171,10 +182,10 @@ function Dashboard() {
               type="button"
               onClick={() => setExpanded((e) => !e)}
               aria-expanded={expanded}
-              aria-label={expanded ? "Show fewer months" : `Show all ${totalMonths} months`}
+              aria-label={expanded ? t("dash.showFewer") : t("dash.showAll", { n: totalMonths })}
               className="flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium text-teal hover:text-teal/80"
             >
-              {expanded ? "Show less" : `Show all ${totalMonths} months`}
+              {expanded ? t("dash.showLess") : t("dash.showAll", { n: totalMonths })}
               <ChevronDown className={cn("h-4 w-4 transition-transform", expanded && "rotate-180")} aria-hidden />
             </button>
           </div>
@@ -188,10 +199,10 @@ function Dashboard() {
           onClick={handleExplain}
           disabled={ai.status === "loading"}
         >
-          <Sparkles /> {ai.status === "loading" ? "Generating…" : "Explain My Results"}
+          <Sparkles /> {ai.status === "loading" ? t("dash.explainLoading") : t("dash.explainButton")}
         </Button>
-        <Button asChild variant="outline"><Link to="/simulate/input">Edit Financial Profile</Link></Button>
-        <Button asChild size="lg"><Link to="/simulate/action-plan">View Action Plan</Link></Button>
+        <Button asChild variant="outline"><Link to="/simulate/input">{t("dash.editProfile")}</Link></Button>
+        <Button asChild size="lg"><Link to="/simulate/action-plan">{t("dash.viewActionPlan")}</Link></Button>
       </div>
 
       <AiExplanation
@@ -201,7 +212,7 @@ function Dashboard() {
         onRetry={handleExplain}
         onDismiss={ai.reset}
         sectionId="ai-explain"
-        sectionTitle="AI Explanation"
+        sectionTitle={t("dash.aiExplanationTitle")}
       />
     </div>
   );
@@ -216,6 +227,7 @@ function Row({ k, a, b }: { k: string; a: string; b: string }) {
 }
 
 function Controls({ scenario: sc, profile, onChange }: { scenario: Scenario; profile: FinancialProfile; onChange: (s: Scenario) => void }) {
+  const t = useT();
   const start = sc.interruption?.startMonth ?? 1;
   const maxDur = sc.horizon - start + 1;
   const dur = sc.interruption?.durationMonths ?? sc.horizon;
@@ -224,9 +236,9 @@ function Controls({ scenario: sc, profile, onChange }: { scenario: Scenario; pro
   return (
     <section className="rounded-xl border bg-card p-6" aria-labelledby="ctl-h">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 id="ctl-h" className="text-lg font-semibold">Adjust scenario</h2>
+        <h2 id="ctl-h" className="text-lg font-semibold">{t("dash.adjustScenario")}</h2>
         <Button type="button" variant="outline" size="sm" onClick={() => onChange(resetScenario(sc, profile))}>
-          <RotateCcw /> Reset Scenario
+          <RotateCcw /> {t("dash.resetScenario")}
         </Button>
       </div>
       <div className="mt-5 grid gap-6 lg:grid-cols-2">
@@ -234,26 +246,26 @@ function Controls({ scenario: sc, profile, onChange }: { scenario: Scenario; pro
           <div className="space-y-5">
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label htmlFor="d-red">Income reduction</Label>
+                <Label htmlFor="d-red">{t("dash.incomeReductionLabel")}</Label>
                 <div className="flex items-center gap-1">
                   <Input id="d-red" type="number" min={0} max={100} step={1} className="h-8 w-20 tabular" value={sc.incomeReductionPct}
                     onChange={(e) => onChange(setReductionPct(sc, Number(e.target.value)))} />
                   <span className="text-sm">%</span>
                 </div>
               </div>
-              <Slider aria-label="Income reduction percent" min={0} max={100} step={1} value={[sc.incomeReductionPct]}
+              <Slider aria-label={t("dash.incomeReductionLabel")} min={0} max={100} step={1} value={[sc.incomeReductionPct]}
                 onValueChange={([v]) => onChange(setReductionPct(sc, v ?? 0))} />
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label htmlFor="d-dur">Duration (from month {start})</Label>
+                <Label htmlFor="d-dur">{t("dash.durationFromMonth", { n: start })}</Label>
                 <div className="flex items-center gap-1">
                   <Input id="d-dur" type="number" min={1} max={maxDur} step={1} className="h-8 w-20 tabular" value={dur}
                     onChange={(e) => onChange(setDuration(sc, Number(e.target.value)))} />
-                  <span className="text-sm">months</span>
+                  <span className="text-sm">{t("input.months")}</span>
                 </div>
               </div>
-              <Slider aria-label="Duration in months" min={1} max={Math.max(1, maxDur)} step={1} value={[dur]}
+              <Slider aria-label={t("dash.durationAria")} min={1} max={Math.max(1, maxDur)} step={1} value={[dur]}
                 onValueChange={([v]) => onChange(setDuration(sc, v ?? 1))} />
             </div>
           </div>
@@ -262,18 +274,18 @@ function Controls({ scenario: sc, profile, onChange }: { scenario: Scenario; pro
           <div className="space-y-5">
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <Label htmlFor="d-amt">Unexpected expense (VND)</Label>
+                <Label htmlFor="d-amt">{t("dash.unexpectedExpenseVnd")}</Label>
                 <Input id="d-amt" inputMode="numeric" className="h-8 w-40 tabular" value={exp.amount.toLocaleString("en-US")}
                   onChange={(e) => { const n = parseAmount(e.target.value); onChange(setExpense(sc, { amount: n === null || Number.isNaN(n) ? 0 : n })); }} />
               </div>
-              <Slider aria-label="Unexpected expense amount" min={0} max={sliderMax} step={100_000} value={[exp.amount]}
+              <Slider aria-label={t("dash.unexpectedAria")} min={0} max={sliderMax} step={100_000} value={[exp.amount]}
                 onValueChange={([v]) => onChange(setExpense(sc, { amount: v ?? 0 }))} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="d-mon">Expense month</Label>
+              <Label htmlFor="d-mon">{t("dash.expenseMonth")}</Label>
               <select id="d-mon" value={exp.month} onChange={(e) => onChange(setExpense(sc, { month: Number(e.target.value) }))}
                 className="block h-9 rounded-md border border-input bg-card px-2 text-sm">
-                {Array.from({ length: sc.horizon }, (_, k) => <option key={k} value={k + 1}>Month {k + 1}</option>)}
+                {Array.from({ length: sc.horizon }, (_, k) => <option key={k} value={k + 1}>{t("input.monthN", { n: k + 1 })}</option>)}
               </select>
             </div>
           </div>

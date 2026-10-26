@@ -2,6 +2,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useReadingEmphasis } from "@/hooks/useReadingEmphasis";
+import { useT } from "@/i18n/LanguageContext";
+import type { TranslationKey } from "@/i18n/translations";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 export const Route = createFileRoute("/")({
@@ -16,44 +18,22 @@ export const Route = createFileRoute("/")({
   component: Home,
 });
 
-const steps = [
-  {
-    eyebrow: "Step 1",
-    heading: "Start with your financial picture",
-    highlight: "financial picture",
-    text: "Start with a few essential details about your income, living expenses, debt payments, and savings.",
-  },
-  {
-    eyebrow: "Step 2",
-    heading: "Explore possible futures",
-    highlight: "possible futures",
-    text: "Simulate income reductions, temporary interruptions, unexpected expenses, and combined financial shocks over the next 3, 6, or 12 months.",
-  },
-  {
-    eyebrow: "Step 3",
-    heading: "Understand your financial risk",
-    highlight: "financial risk",
-    text: "See how your projected balance changes over time, identify potential shortfalls, and understand why a risk level is assigned.",
-  },
-  {
-    eyebrow: "Step 4",
-    heading: "Turn insights into action",
-    highlight: "into action",
-    text: "Explore relevant solutions, test supported adjustments, and get AI-assisted explanations and practical next steps.",
-  },
+interface Step {
+  eyebrowKey: TranslationKey;
+  headingKey: TranslationKey;
+  highlightKey: TranslationKey;
+  textKey: TranslationKey;
+}
+
+const STEPS: Step[] = [
+  { eyebrowKey: "home.step1Eyebrow", headingKey: "home.step1Heading", highlightKey: "home.step1Highlight", textKey: "home.step1Text" },
+  { eyebrowKey: "home.step2Eyebrow", headingKey: "home.step2Heading", highlightKey: "home.step2Highlight", textKey: "home.step2Text" },
+  { eyebrowKey: "home.step3Eyebrow", headingKey: "home.step3Heading", highlightKey: "home.step3Highlight", textKey: "home.step3Text" },
+  { eyebrowKey: "home.step4Eyebrow", headingKey: "home.step4Heading", highlightKey: "home.step4Highlight", textKey: "home.step4Text" },
 ];
 
-const doesBullets = [
-  "Projects month-end balances from your own figures",
-  "Compares a baseline with your chosen scenario",
-  "Explains exactly why a risk level was assigned",
-];
-
-const doesNotBullets = [
-  "No probabilities, credit scores or investment advice",
-  "No account or bank connection required",
-  "Your data is not stored on a server",
-];
+const DOES_KEYS: TranslationKey[] = ["home.doesBullet1", "home.doesBullet2", "home.doesBullet3"];
+const DOES_NOT_KEYS: TranslationKey[] = ["home.doesNotBullet1", "home.doesNotBullet2", "home.doesNotBullet3"];
 
 const GREEN = "text-[oklch(0.48_0.13_160)]";
 const INACTIVE = "story-stage-inactive";
@@ -84,6 +64,7 @@ function renderHighlighted(
 }
 
 function Home() {
+  const t = useT();
   const sloganRef = useRef<HTMLDivElement>(null);
   const [sloganActive, setSloganActive] = useState(false);
 
@@ -127,15 +108,14 @@ function Home() {
       <section className="bg-hero text-navy-foreground">
         <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-28 lg:py-32">
           <p className="text-sm font-semibold uppercase tracking-wider text-teal">
-            Cash-flow resilience simulator
+            {t("home.eyebrow")}
           </p>
           <h1 className="mt-4 max-w-3xl text-4xl font-extrabold leading-tight sm:text-5xl lg:text-6xl">
-            Know how long your money lasts —{" "}
-            <span className="text-teal">before something goes wrong.</span>
+            {t("home.heroTitle")}{" "}
+            <span className="text-teal">{t("home.heroTitleHighlight")}</span>
           </h1>
           <p className="mt-5 max-w-2xl text-lg leading-relaxed opacity-80 sm:max-w-3xl lg:max-w-4xl">
-            SafeFlow AI projects your month-end balance under the shocks you
-            choose, using clear, deterministic formulas. No sign-up required.
+            {t("home.heroBody")}
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Button
@@ -144,7 +124,7 @@ function Home() {
               className="bg-teal text-navy hover:bg-teal/90"
             >
               <Link to="/simulate/input">
-                Start a simulation <ArrowRight />
+                {t("home.startSimulation")} <ArrowRight />
               </Link>
             </Button>
           </div>
@@ -165,7 +145,7 @@ function Home() {
                   isActive ? `${ACTIVE} text-navy` : INACTIVE
                 }`}
               >
-                How SafeFlow AI Works
+                {t("home.howItWorks")}
               </h2>
             );
           })()}
@@ -173,17 +153,19 @@ function Home() {
 
         {/* Steps as continuous narrative */}
         <div className="mx-auto max-w-3xl px-4 sm:px-6">
-          {steps.map((step) => {
+          {STEPS.map((step) => {
             const eyebrowIdx = nextUnit();
             const headingIdx = nextUnit();
             const bodyIdx = nextUnit();
             const eyebrowActive = activeSet.has(eyebrowIdx);
             const headingActive = activeSet.has(headingIdx);
             const bodyActive = activeSet.has(bodyIdx);
+            const heading = t(step.headingKey);
+            const highlight = t(step.highlightKey);
 
             return (
               <div
-                key={step.eyebrow}
+                key={step.eyebrowKey}
                 className="min-h-[45vh] py-12 sm:min-h-[40vh] sm:py-16 lg:py-20"
               >
                 <p
@@ -192,7 +174,7 @@ function Home() {
                     eyebrowActive ? `${ACTIVE} ${GREEN}` : INACTIVE
                   }`}
                 >
-                  {step.eyebrow}
+                  {t(step.eyebrowKey)}
                 </p>
                 <h3
                   ref={setEmphasisRef(headingIdx)}
@@ -201,8 +183,8 @@ function Home() {
                   }`}
                 >
                   {renderHighlighted(
-                    step.heading,
-                    step.highlight,
+                    heading,
+                    highlight,
                     headingActive,
                   )}
                 </h3>
@@ -212,7 +194,7 @@ function Home() {
                     bodyActive ? ACTIVE : INACTIVE
                   }`}
                 >
-                  {step.text}
+                  {t(step.textKey)}
                 </p>
               </div>
             );
@@ -234,17 +216,18 @@ function Home() {
                       headingActive ? `${ACTIVE} ${GREEN}` : INACTIVE
                     }`}
                   >
-                    What SafeFlow does
+                    {t("home.whatDoes")}
                   </h3>
                 );
               })()}
               <ul className="mt-5 space-y-4">
-                {doesBullets.map((bullet) => {
+                {DOES_KEYS.map((key, i) => {
                   const idx = nextUnit();
                   const isActive = activeSet.has(idx);
+                  const bullet = t(key);
                   return (
                     <li
-                      key={bullet}
+                      key={i}
                       ref={setEmphasisRef(idx)}
                       className={`story-stage flex gap-3 text-lg leading-relaxed ${
                         isActive ? ACTIVE : INACTIVE
@@ -275,17 +258,18 @@ function Home() {
                       headingActive ? `${ACTIVE} ${GREEN}` : INACTIVE
                     }`}
                   >
-                    What it does not do
+                    {t("home.whatDoesNot")}
                   </h3>
                 );
               })()}
               <ul className="mt-5 space-y-4">
-                {doesNotBullets.map((bullet) => {
+                {DOES_NOT_KEYS.map((key, i) => {
                   const idx = nextUnit();
                   const isActive = activeSet.has(idx);
+                  const bullet = t(key);
                   return (
                     <li
-                      key={bullet}
+                      key={i}
                       ref={setEmphasisRef(idx)}
                       className={`story-stage flex gap-3 text-lg leading-relaxed ${
                         isActive ? ACTIVE : INACTIVE
@@ -316,8 +300,8 @@ function Home() {
               sloganActive ? "story-slogan-active" : "story-slogan-inactive"
             }`}
           >
-            See the risks. Understand your options.{" "}
-            <span className={GREEN}>Move forward with confidence.</span>
+            {t("home.sloganPre")}{" "}
+            <span className={GREEN}>{t("home.sloganHighlight")}</span>
           </p>
 
           {/* CTA — compact navy button */}
@@ -332,7 +316,7 @@ function Home() {
               className="bg-navy text-navy-foreground hover:bg-navy/90"
             >
               <Link to="/simulate/input">
-                Start a Simulation <ArrowRight />
+                {t("home.startSimulationCaps")} <ArrowRight />
               </Link>
             </Button>
           </div>

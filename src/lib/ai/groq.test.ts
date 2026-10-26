@@ -10,6 +10,7 @@ import {
 const validInput: AiRequest = {
   feature: "explain_results",
   context: "Scenario: 3-month income drop. Safety buffer: 15,000,000 VND. Risk classification: Medium.",
+  language: "en",
 };
 
 const VALID_KEY = "test-key-abc123";
@@ -360,7 +361,7 @@ describe("callGroq — context truncation safeguard", () => {
     const marker = "Scenario: ";
     const longContext = marker + "x".repeat(6000 - marker.length);
     await callGroq(
-      { feature: "explain_results", context: longContext },
+      { feature: "explain_results", context: longContext, language: "en" },
       VALID_KEY,
       { fetchFn },
     );

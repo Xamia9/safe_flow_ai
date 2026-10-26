@@ -1,10 +1,16 @@
 import { z } from "zod";
 import { createServerFn } from "@tanstack/react-start";
+import type { Language } from "@/i18n/translations";
 
 const GROQ_MODEL = "openai/gpt-oss-120b" as const;
 const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions" as const;
 const MAX_CONTEXT_LENGTH = 6000;
 const REQUEST_TIMEOUT_MS = 30_000;
+
+const LANGUAGE_INSTRUCTIONS: Record<Language, string> = {
+  en: "Respond in clear English.",
+  vi: "Respond in clear, professional Vietnamese (Tieng Viet). Keep brand names, currency values, and numbers unchanged.",
+};
 
 /** Minimum markers that a legitimate SafeFlow context string should contain.
  *  The context builder always emits at least a "Scenario:" line and a
@@ -18,6 +24,7 @@ function looksLikeSafeFlowContext(context: string): boolean {
 export const aiRequestSchema = z.object({
   feature: z.enum(["explain_results", "generate_action_plan"]),
   context: z.string().min(1).max(MAX_CONTEXT_LENGTH),
+  language: z.enum(["en", "vi"]).default("en"),
 }).refine(
   (data) => looksLikeSafeFlowContext(data.context),
   { message: "Context does not match expected SafeFlow format." },
@@ -94,10 +101,11 @@ const MAX_TOKENS: Record<AiRequest["feature"], number> = {
   generate_action_plan: 650,
 };
 
-function getSystemPrompt(feature: AiRequest["feature"]): string {
-  return feature === "explain_results"
+function getSystemPrompt(feature: AiRequest["feature"], language: Language): string {
+  const base = feature === "explain_results"
     ? EXPLAIN_RESULTS_PROMPT
     : GENERATE_ACTION_PLAN_PROMPT;
+  return `${base}\n${LANGUAGE_INSTRUCTIONS[language]}`;
 }
 
 interface GroqChoice {
@@ -157,7 +165,7 @@ export async function callGroq(
       body: JSON.stringify({
         model: GROQ_MODEL,
         messages: [
-          { role: "system", content: getSystemPrompt(request.feature) },
+          { role: "system", content: getSystemPrompt(request.feature, request.language) },
           { role: "user", content: contextPayload },
         ],
         temperature: 0.3,

@@ -7,9 +7,7 @@
  */
 import type { SolutionId } from "./recommendations";
 import type { TranslationKey } from "@/i18n/translations";
-import type { t as TFn } from "@/i18n/LanguageContext";
-
-type T = typeof TFn;
+import type { TranslateFn as T } from "@/i18n/LanguageContext";
 
 export interface ServiceLink {
   provider: string;

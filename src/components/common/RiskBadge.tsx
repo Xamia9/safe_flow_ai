@@ -1,5 +1,7 @@
 import type { RiskLevel } from "@/types/financial";
 import { cn } from "@/lib/utils";
+import { useT } from "@/i18n/LanguageContext";
+import { riskLevelLabel } from "@/lib/localizedContent";
 
 const styles: Record<RiskLevel, string> = {
   Low: "bg-teal-soft text-teal",
@@ -8,9 +10,10 @@ const styles: Record<RiskLevel, string> = {
 };
 
 export function RiskBadge({ level }: { level: RiskLevel }) {
+  const t = useT();
   return (
     <span className={cn("inline-flex rounded-full px-3 py-1 text-sm font-semibold", styles[level])}>
-      {level} risk
+      {riskLevelLabel(level, t)}
     </span>
   );
 }
