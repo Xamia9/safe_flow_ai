@@ -8,8 +8,8 @@ const MAX_CONTEXT_LENGTH = 6000;
 const REQUEST_TIMEOUT_MS = 30_000;
 
 const LANGUAGE_INSTRUCTIONS: Record<Language, string> = {
-  en: "Respond in clear English.",
-  vi: "Respond in clear, professional Vietnamese (Tieng Viet). Keep brand names, currency values, and numbers unchanged.",
+  en: "Respond entirely in clear English. Do not mix other languages into headings, labels, or prose. Keep brand names (SafeFlow AI), currency values, and numbers unchanged.",
+  vi: "Respond entirely in clear, professional Vietnamese (Tiếng Việt). Every heading, section title, keyword, label, bullet, and explanatory sentence must be in Vietnamese. Do not use English headings or labels. Keep brand names (SafeFlow AI), currency values, and numbers unchanged.",
 };
 
 /** Minimum markers that a legitimate SafeFlow context string should contain.
@@ -64,15 +64,44 @@ const SHARED_RULES = [
   "- No lengthy introductions, generic financial advice, or repetitive conclusions.",
 ].join("\n");
 
+export const EXPLAIN_SECTION_HEADINGS: Record<Language, string> = {
+  en: [
+    "Use exactly these sections, each as a bold label on its own line:",
+    "**Key Findings** — up to 3 short bullets.",
+    "**What This Means** — up to 2 sentences explaining the implications.",
+    "**Important Note** — one brief sentence stating this is a simulation, not a guarantee.",
+  ].join("\n"),
+  vi: [
+    "Sử dụng đúng các phần sau, mỗi phần là một nhãn in đậm trên một dòng:",
+    "**Điểm chính** — tối đa 3 gạch đầu dòng ngắn.",
+    "**Ý nghĩa** — tối đa 2 câu giải thích hệ quả.",
+    "**Lưu ý quan trọng** — một câu ngắn nêu rõ đây là mô phỏng, không phải bảo chứng.",
+  ].join("\n"),
+};
+
+export const ACTION_PLAN_SECTION_HEADINGS: Record<Language, string> = {
+  en: [
+    "Use exactly these sections, each as a bold label on its own line:",
+    "**Simulation Takeaway** — up to 3 concise bullets with only the most relevant supplied results.",
+    "**Your Action Steps** — up to 4 practical, numbered steps.",
+    "**What to Watch** — up to 2 brief bullets.",
+    "**Important Note** — one brief sentence clarifying simulated outcomes are not guaranteed.",
+  ].join("\n"),
+  vi: [
+    "Sử dụng đúng các phần sau, mỗi phần là một nhãn in đậm trên một dòng:",
+    "**Tóm tắt mô phỏng** — tối đa 3 gạch đầu dòng súc tích chỉ với kết quả relevant nhất.",
+    "**Các bước hành động** — tối đa 4 bước thực tế, đánh số.",
+    "**Điều cần theo dõi** — tối đa 2 gạch đầu dòng ngắn.",
+    "**Lưu ý quan trọng** — một câu ngắn nêu rõ kết quả mô phỏng không phải bảo chứng.",
+  ].join("\n"),
+};
+
 export const EXPLAIN_RESULTS_PROMPT = [
   "You are SafeFlow AI's financial results explainer.",
-  "Explain simulation results that the application has already computed, in clear English for non-experts.",
+  "Explain simulation results that the application has already computed, in clear language for non-experts.",
   "",
   "Length: maximum 120 words.",
-  "Use exactly these sections, each as a bold label on its own line:",
-  "**Key Findings** — up to 3 short bullets.",
-  "**What This Means** — up to 2 sentences explaining the implications.",
-  "**Important Note** — one brief sentence stating this is a simulation, not a guarantee.",
+  "{SECTION_HEADINGS}",
   "Explain only the most important metrics. Do not repeat the entire dashboard and do not produce tables.",
   "",
   SHARED_RULES,
@@ -86,11 +115,7 @@ export const GENERATE_ACTION_PLAN_PROMPT = [
   "Focus exclusively on the ONE solution selected by the user and its latest completed experiment.",
   "Do not select new recommendation categories, invent experiments, or change calculated outcomes.",
   "Do not claim that any action guarantees financial safety.",
-  "Use exactly these sections, each as a bold label on its own line:",
-  "**Simulation Takeaway** — up to 3 concise bullets with only the most relevant supplied results.",
-  "**Your Action Steps** — up to 4 practical, numbered steps.",
-  "**What to Watch** — up to 2 brief bullets.",
-  "**Important Note** — one brief sentence clarifying simulated outcomes are not guaranteed.",
+  "{SECTION_HEADINGS}",
   "Avoid repeating metrics across sections. Prefer bullets over tables; only use a small Markdown table when comparing a few essential before-and-after metrics genuinely improves readability.",
   "",
   SHARED_RULES,
@@ -102,9 +127,13 @@ const MAX_TOKENS: Record<AiRequest["feature"], number> = {
 };
 
 function getSystemPrompt(feature: AiRequest["feature"], language: Language): string {
-  const base = feature === "explain_results"
+  const headings = feature === "explain_results"
+    ? EXPLAIN_SECTION_HEADINGS[language]
+    : ACTION_PLAN_SECTION_HEADINGS[language];
+  const template = feature === "explain_results"
     ? EXPLAIN_RESULTS_PROMPT
     : GENERATE_ACTION_PLAN_PROMPT;
+  const base = template.replace("{SECTION_HEADINGS}", headings);
   return `${base}\n${LANGUAGE_INSTRUCTIONS[language]}`;
 }
 

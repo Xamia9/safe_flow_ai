@@ -298,6 +298,8 @@ export const en = {
   "ap.description":
     "Review your results and test how changes could improve your resilience. Projections are estimates, not guarantees.",
   "ap.exportPdf": "Export PDF",
+  "ap.exporting": "Exporting…",
+  "ap.exportPdfError": "Could not generate the PDF. Please try again.",
   "ap.noReportTitle": "Nothing to report yet",
   "ap.noReportBody":
     "Run a simulation first. Your summary and action plan will appear here.",
@@ -662,8 +664,8 @@ export const vi: Record<TranslationKey, string> = {
   "home.metaDesc":
     "Mô phỏng các cú sốc thu nhập và chi phí phát sinh theo từng tháng và xem khi nào tiền tiết kiệm của bạn sẽ cạn. Dùng ngay, không cần đăng nhập, tính bằng VND.",
   "home.eyebrow": "Công cụ mô phỏng khả năng chịu đựng dòng tiền",
-  "home.heroTitle": "Biết tiền của bạn trụ được bao lâu — ",
-  "home.heroTitleHighlight": "trước khi sự cố xảy ra.",
+  "home.heroTitle": "Hiểu rõ sức chống chịu tài chính — ",
+  "home.heroTitleHighlight": "trước khi biến cố xảy ra.",
   "home.heroBody":
     "SafeFlow AI dự phóng số dư cuối tháng của bạn dưới các cú sốc bạn chọn, bằng những công thức rõ ràng và tất định. Không cần đăng ký.",
   "home.startSimulation": "Bắt đầu mô phỏng",
@@ -904,6 +906,8 @@ export const vi: Record<TranslationKey, string> = {
   "ap.description":
     "Xem lại kết quả và thử cách thay đổi có thể cải thiện khả năng chịu đựng. Dự phóng là ước tính, không phải bảo chứng.",
   "ap.exportPdf": "Xuất PDF",
+  "ap.exporting": "Đang xuất…",
+  "ap.exportPdfError": "Không thể tạo PDF. Vui lòng thử lại.",
   "ap.noReportTitle": "Chưa có báo cáo",
   "ap.noReportBody":
     "Hãy chạy mô phỏng trước. Tóm tắt và kế hoạch hành động sẽ hiển thị tại đây.",

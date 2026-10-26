@@ -14,6 +14,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { AppFooter } from "@/components/layout/AppFooter";
+import { FloatingLanguageToggle } from "@/components/common/FloatingLanguageToggle";
 import { LanguageProvider, useT } from "@/i18n/LanguageContext";
 
 function NotFoundComponent() {
@@ -130,6 +131,7 @@ function RootComponent() {
             <Outlet />
           </main>
           <AppFooter />
+          <FloatingLanguageToggle />
         </div>
       </QueryClientProvider>
     </LanguageProvider>

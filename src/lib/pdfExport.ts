@@ -17,6 +17,59 @@ const LH = 5;
 const LH_S = 4.2;
 const CHART_PAD = 4;
 
+/* ── Font management ──
+ * jsPDF's built-in "helvetica" uses WinAnsi encoding which cannot render
+ * Vietnamese diacritics. We fetch and embed Roboto TTF (full Unicode coverage
+ * including Vietnamese) at export time, then use it for all text. */
+const FONT_URLS = {
+  regular: "https://cdn.jsdelivr.net/gh/googlefonts/roboto/src/hinted/Roboto-Regular.ttf",
+  bold: "https://cdn.jsdelivr.net/gh/googlefonts/roboto/src/hinted/Roboto-Bold.ttf",
+  italic: "https://cdn.jsdelivr.net/gh/googlefonts/roboto/src/hinted/Roboto-Italic.ttf",
+};
+
+type FontData = { regular: string; bold: string; italic: string };
+let fontCache: FontData | null = null;
+let fontFetchPromise: Promise<FontData> | null = null;
+
+async function fetchFontBase64(url: string): Promise<string> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to load font: ${url}`);
+  const buf = await res.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]!);
+  return btoa(binary);
+}
+
+async function loadFonts(): Promise<FontData> {
+  if (fontCache) return fontCache;
+  if (fontFetchPromise) return fontFetchPromise;
+  fontFetchPromise = (async () => {
+    const [regular, bold, italic] = await Promise.all([
+      fetchFontBase64(FONT_URLS.regular),
+      fetchFontBase64(FONT_URLS.bold),
+      fetchFontBase64(FONT_URLS.italic),
+    ]);
+    fontCache = { regular, bold, italic };
+    return fontCache;
+  })();
+  return fontFetchPromise;
+}
+
+const FONT_NAME = "Roboto";
+
+async function createPdfDoc(): Promise<jsPDF> {
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const fonts = await loadFonts();
+  doc.addFileToVFS("Roboto-Regular.ttf", fonts.regular);
+  doc.addFileToVFS("Roboto-Bold.ttf", fonts.bold);
+  doc.addFileToVFS("Roboto-Italic.ttf", fonts.italic);
+  doc.addFont("Roboto-Regular.ttf", FONT_NAME, "normal");
+  doc.addFont("Roboto-Bold.ttf", FONT_NAME, "bold");
+  doc.addFont("Roboto-Italic.ttf", FONT_NAME, "italic");
+  return doc;
+}
+
 /* ── Colors ── */
 const C = {
   navy: [30, 58, 95] as [number, number, number],
@@ -63,7 +116,7 @@ function vndS(v: number): string {
   return `${s}${a}`;
 }
 
-export function exportSimulationPdf(profile: FinancialProfile, scenario: Scenario, t: T): void {
+export async function exportSimulationPdf(profile: FinancialProfile, scenario: Scenario, t: T): Promise<void> {
   if (!profile || !scenario || scenario.horizon <= 0) return;
 
   const result = simulate(profile, scenario);
@@ -72,7 +125,7 @@ export function exportSimulationPdf(profile: FinancialProfile, scenario: Scenari
   const recs = localizedRecommendations({ profile, scenario, result }, t);
   const now = new Date();
 
-  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const doc = await createPdfDoc();
   let y = drawHeader(doc, scenario, now, t);
   y = drawInputSummary(doc, y, profile, t);
   y = drawScenario(doc, y, scenario, summary, t);
@@ -86,23 +139,37 @@ export function exportSimulationPdf(profile: FinancialProfile, scenario: Scenari
   doc.save(`safeflow-report-${now.toISOString().slice(0, 10)}.pdf`);
 }
 
+/* ── Font helpers ── */
+function setFont(doc: jsPDF, style: "normal" | "bold" | "italic", size: number): void {
+  doc.setFont(FONT_NAME, style);
+  doc.setFontSize(size);
+}
+
+/* ── Text width measurement that respects current font settings ── */
+function textW(doc: jsPDF, text: string): number {
+  return doc.getTextWidth(text);
+}
+
+/* ── Split text to width, returning string[] ── */
+function splitText(doc: jsPDF, text: string, maxWidth: number): string[] {
+  return doc.splitTextToSize(text, maxWidth) as string[];
+}
+
 function drawHeader(doc: jsPDF, scenario: Scenario, now: Date, t: T): number {
   doc.setFillColor(...C.navy);
   doc.rect(0, 0, PW, 26, "F");
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(19);
+  setFont(doc, "bold", 19);
   doc.setTextColor(...C.white);
   doc.text("SafeFlow AI", M, 12);
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
+  setFont(doc, "normal", 8.5);
   doc.setTextColor(175, 190, 210);
   doc.text(t("pdf.reportTitle"), M, 18);
 
   const ds = now.toLocaleDateString("en-GB", { year: "numeric", month: "long", day: "numeric" });
   const ts = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-  doc.setFontSize(7.5);
+  setFont(doc, "normal", 7.5);
   doc.text(t("pdf.generated", { date: ds, time: ts }), M, 23);
   doc.text(t("pdf.horizon", { n: scenario.horizon }), PW - M, 23, { align: "right" });
 
@@ -124,11 +191,11 @@ const FIELD_LABELS: Record<string, TranslationKey> = {
 
 function drawInputSummary(doc: jsPDF, y: number, profile: FinancialProfile, t: T): number {
   y = secTitleKeep(doc, t("pdf.inputSummary"), y, 20);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
+  setFont(doc, "normal", 7.5);
   doc.setTextColor(...C.muted);
-  doc.text(t("pdf.inputNote"), M, y);
-  y += 5;
+  const noteLines = splitText(doc, t("pdf.inputNote"), CW);
+  doc.text(noteLines, M, y);
+  y += (noteLines.length as number) * LH_S + 2;
 
   const colW = CW / 2;
   const rowH = 9;
@@ -142,15 +209,15 @@ function drawInputSummary(doc: jsPDF, y: number, profile: FinancialProfile, t: T
     const isOptional = key === "flexibleExpenses";
     const disp = (isOptional && (val === null || val === undefined)) ? "0 VND" : vnd(typeof val === "number" ? val : 0);
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
+    setFont(doc, "normal", 7.5);
     doc.setTextColor(...C.muted);
-    doc.text(t(FIELD_LABELS[key]!), x + 2, rowY);
+    const labelLines = splitText(doc, t(FIELD_LABELS[key]!), colW - 6);
+    doc.text(labelLines[0] as string, x + 2, rowY);
 
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
+    setFont(doc, "bold", 9);
     doc.setTextColor(...C.text);
-    doc.text(disp, x + 2, rowY + 4.5);
+    const valLines = splitText(doc, disp, colW - 6);
+    doc.text(valLines[0] as string, x + 2, rowY + 4.5);
 
     doc.setDrawColor(...C.border);
     doc.setLineWidth(0.2);
@@ -162,21 +229,35 @@ function drawInputSummary(doc: jsPDF, y: number, profile: FinancialProfile, t: T
   if (col > 0) rowY += rowH;
   y = rowY + 1;
 
-  y = ensure(doc, y, 12);
-  doc.setFillColor(...C.navySoft);
-  doc.roundedRect(M, y, CW, 11, 2, 2, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.5);
-  doc.setTextColor(...C.navy);
-  doc.text(t("pdf.safetyBuffer"), M + 4, y + 5);
-  doc.setTextColor(...C.navy);
-  doc.text(vnd(profile.safetyBuffer), M + 80, y + 5);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
-  doc.setTextColor(...C.muted);
-  doc.text(t("pdf.safetyBufferNote"), M + 4, y + 9);
+  // Safety buffer box — measure label width to position value without overlap
+  y = ensure(doc, y, 14);
+  setFont(doc, "bold", 8.5);
+  const bufLabel = t("pdf.safetyBuffer");
+  const bufLabelW = textW(doc, bufLabel);
+  const bufVal = vnd(profile.safetyBuffer);
+  const bufValW = textW(doc, bufVal);
+  const boxH = Math.max(11, bufLabelW + bufValW + 12 > CW - 8 ? 14 : 11);
 
-  return y + 16;
+  doc.setFillColor(...C.navySoft);
+  doc.roundedRect(M, y, CW, boxH, 2, 2, "F");
+  doc.setTextColor(...C.navy);
+  doc.text(bufLabel, M + 4, y + 5);
+
+  // Position value after label, or on next line if too wide
+  if (bufLabelW + bufValW + 8 < CW - 8) {
+    doc.text(bufVal, M + 4 + bufLabelW + 6, y + 5);
+  } else {
+    setFont(doc, "bold", 8.5);
+    doc.text(bufVal, M + 4, y + 9.5);
+  }
+
+  setFont(doc, "normal", 7);
+  doc.setTextColor(...C.muted);
+  const bufNoteLines = splitText(doc, t("pdf.safetyBufferNote"), CW - 8);
+  const noteY = bufLabelW + bufValW + 8 < CW - 8 ? y + 9 : y + 13;
+  doc.text(bufNoteLines, M + 4, noteY);
+
+  return y + boxH + 4;
 }
 
 function drawScenario(doc: jsPDF, y: number, sc: Scenario, sm: ScenarioSummary, t: T): number {
@@ -188,17 +269,13 @@ function drawScenario(doc: jsPDF, y: number, sc: Scenario, sm: ScenarioSummary, 
   for (const e of sm.expenses) y = kvRow(doc, t("pdf.unexpectedExpenseMonth", { n: e.month }), vnd(e.amount), y);
 
   y = ensure(doc, y, 16);
-  doc.setFillColor(...C.tealSoft);
-  doc.roundedRect(M, y, CW, 14, 2, 2, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
+  setFont(doc, "bold", 8);
   doc.setTextColor(...C.teal);
   doc.text(t("pdf.riskClassification"), M + 4, y + 4.5);
-  doc.setFont("helvetica", "normal");
+  setFont(doc, "normal", 7);
   doc.setTextColor(...C.text);
-  doc.setFontSize(7);
   const rn = t("pdf.riskNote");
-  const rl = doc.splitTextToSize(rn, CW - 8);
+  const rl = splitText(doc, rn, CW - 8);
   doc.text(rl, M + 4, y + 7.5);
   y += 14 + (rl.length - 1) * 3.2 + 2;
 
@@ -211,21 +288,34 @@ function drawKeyResults(doc: jsPDF, y: number, r: SimulationResult, p: Financial
   const rc = r.risk.level === "High" ? { bg: C.rHighSoft, fg: C.rHigh }
     : r.risk.level === "Medium" ? { bg: C.rMedSoft, fg: C.rMed }
     : { bg: C.rLowSoft, fg: C.rLow };
-  y = ensure(doc, y, 12);
-  doc.setFillColor(...rc.bg);
-  doc.roundedRect(M, y, CW, 9, 2, 2, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9.5);
-  doc.setTextColor(...rc.fg);
-  doc.text(t("pdf.riskLevel", { level: r.risk.level }), M + 4, y + 6);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
-  doc.setTextColor(...C.muted);
+  y = ensure(doc, y, 14);
+
+  const riskLabel = t("pdf.riskLevel", { level: r.risk.level });
+  setFont(doc, "bold", 9.5);
+  const riskLabelW = textW(doc, riskLabel);
   const riskReasons = localizedRiskReasons(r, t);
   const rrt = riskReasons.join("  ");
-  const rrl = doc.splitTextToSize(rrt, CW - 70);
-  doc.text(rrl, M + 65, y + 6);
-  y += 13;
+  const riskBoxH = 10;
+
+  doc.setFillColor(...rc.bg);
+  doc.roundedRect(M, y, CW, riskBoxH, 2, 2, "F");
+  setFont(doc, "bold", 9.5);
+  doc.setTextColor(...rc.fg);
+  doc.text(riskLabel, M + 4, y + 6);
+
+  // Place risk reasons after the label, wrapping if needed
+  const reasonsMaxW = CW - riskLabelW - 12;
+  setFont(doc, "normal", 7);
+  doc.setTextColor(...C.muted);
+  if (reasonsMaxW > 40) {
+    const rrl = splitText(doc, rrt, reasonsMaxW);
+    doc.text(rrl, M + 4 + riskLabelW + 6, y + 6);
+  } else {
+    // Not enough room — put reasons on next line
+    const rrl = splitText(doc, rrt, CW - 8);
+    doc.text(rrl, M + 4, y + 9);
+  }
+  y += riskBoxH + 4;
 
   interface Kpi { label: string; value: string; hint?: string | undefined; tone?: [number, number, number] | undefined }
   const kpis: Kpi[] = [
@@ -240,7 +330,7 @@ function drawKeyResults(doc: jsPDF, y: number, r: SimulationResult, p: Financial
   if (r.firstNegativeMonth !== null) kpis.push({ label: t("pdf.firstNegative"), value: t("pdf.monthN", { n: r.firstNegativeMonth }), tone: C.rHigh });
 
   const cardW = (CW - 8) / 3;
-  const cardH = 15;
+  const cardH = 16;
   const gap = 4;
 
   kpis.forEach((k, i) => {
@@ -260,23 +350,21 @@ function drawKeyResults(doc: jsPDF, y: number, r: SimulationResult, p: Financial
     doc.setFillColor(...ac);
     doc.rect(cx, cy, 1.5, cardH, "F");
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(6.5);
+    setFont(doc, "normal", 6.5);
     doc.setTextColor(...C.muted);
-    const ll = doc.splitTextToSize(k.label, cardW - 8);
+    const ll = splitText(doc, k.label, cardW - 8);
     doc.text(ll[0] as string, cx + 4, cy + 4);
 
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
+    setFont(doc, "bold", 9);
     doc.setTextColor(...(k.tone ?? C.text));
-    const vl = doc.splitTextToSize(k.value, cardW - 8);
+    const vl = splitText(doc, k.value, cardW - 8);
     doc.text(vl[0] as string, cx + 4, cy + 9.5);
 
     if (k.hint) {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(6);
+      setFont(doc, "normal", 6);
       doc.setTextColor(...C.lightMuted);
-      doc.text(k.hint, cx + 4, cy + 13);
+      const hl = splitText(doc, k.hint, cardW - 8);
+      doc.text(hl[0] as string, cx + 4, cy + 13.5);
     }
   });
 
@@ -320,8 +408,7 @@ function drawBalanceChart(doc: jsPDF, y: number, active: MonthProjection[], base
     doc.setDrawColor(...C.cGrid);
     doc.setLineWidth(0.2);
     doc.line(plotL, gy, plotR, gy);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(5.5);
+    setFont(doc, "normal", 5.5);
     doc.setTextColor(...C.muted);
     doc.text(vndS(v), cx + 30, gy + 1, { align: "right" });
   }
@@ -331,7 +418,7 @@ function drawBalanceChart(doc: jsPDF, y: number, active: MonthProjection[], base
     doc.setDrawColor(...C.cZero);
     doc.setLineWidth(0.4);
     doc.line(plotL, zy, plotR, zy);
-    doc.setFontSize(5.5);
+    setFont(doc, "normal", 5.5);
     doc.setTextColor(...C.cZero);
     doc.text(t("pdf.zeroBalance"), plotL + 1, zy - 1);
   }
@@ -343,7 +430,7 @@ function drawBalanceChart(doc: jsPDF, y: number, active: MonthProjection[], base
     doc.setLineDashPattern([2, 1.5], 0);
     doc.line(plotL, by, plotR, by);
     doc.setLineDashPattern([], 0);
-    doc.setFontSize(5.5);
+    setFont(doc, "normal", 5.5);
     doc.setTextColor(...C.cBuffer);
     doc.text(t("pdf.bufferShort", { amount: vndS(buffer) }), plotR - 1, by - 1, { align: "right" });
   }
@@ -370,8 +457,7 @@ function drawBalanceChart(doc: jsPDF, y: number, active: MonthProjection[], base
     doc.circle(tX(m.month), tY(m.closingBalance), 0.7, "F");
   });
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(5.5);
+  setFont(doc, "normal", 5.5);
   doc.setTextColor(...C.muted);
   active.forEach(m => doc.text(`M${m.month}`, tX(m.month), cy + ch - 2.5, { align: "center" }));
 
@@ -419,8 +505,7 @@ function drawIncomeOutflowChart(doc: jsPDF, y: number, months: MonthProjection[]
     doc.setDrawColor(...C.cGrid);
     doc.setLineWidth(0.2);
     doc.line(plotL, gy, plotR, gy);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(5.5);
+    setFont(doc, "normal", 5.5);
     doc.setTextColor(...C.muted);
     doc.text(vndS(v), cx + 30, gy + 1, { align: "right" });
   }
@@ -443,8 +528,7 @@ function drawIncomeOutflowChart(doc: jsPDF, y: number, months: MonthProjection[]
   }
   months.forEach(m => { doc.setFillColor(...C.cOutflow); doc.circle(tX(m.month), tY(m.outflow), 0.6, "F"); });
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(5.5);
+  setFont(doc, "normal", 5.5);
   doc.setTextColor(...C.muted);
   months.forEach(m => doc.text(`M${m.month}`, tX(m.month), cy + ch - 2.5, { align: "center" }));
 
@@ -460,32 +544,34 @@ function drawMonthlyTable(doc: jsPDF, y: number, months: MonthProjection[], t: T
   y = secTitleKeep(doc, t("pdf.monthlyCashFlow"), y, 18);
 
   const headers = [t("pdf.colMonth"), t("pdf.colIncome"), t("pdf.colOutflow"), t("pdf.colNetFlow"), t("pdf.colClosing"), t("pdf.colStatus")];
-  const colW = [13, 31, 31, 31, 38, 30];
+  // Widen status column for Vietnamese text, narrow others slightly
+  const colW = [12, 29, 29, 29, 36, 32];
   const tw = colW.reduce((a, b) => a + b, 0);
-  const rh = 6;
+  const rh = 7;
 
   function headerRow(yP: number): number {
     y = ensure(doc, yP, rh + 1);
     doc.setFillColor(...C.thBg);
     doc.rect(M, y, tw, rh, "F");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(7);
+    setFont(doc, "bold", 7);
     doc.setTextColor(...C.thText);
     let x = M + 2;
-    headers.forEach((h, i) => { doc.text(h, x, y + 4); x += colW[i] ?? 0; });
+    headers.forEach((h, i) => {
+      const lines = splitText(doc, h, colW[i]! - 2);
+      doc.text(lines[0] as string, x, y + 4);
+      x += colW[i]!;
+    });
     return y + rh;
   }
 
   y = headerRow(y);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
+  setFont(doc, "normal", 7);
 
   months.forEach((m, idx) => {
     y = ensure(doc, y, rh);
     if (y === M) {
       y = headerRow(y);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(7);
+      setFont(doc, "normal", 7);
     }
 
     if (idx % 2 === 1) {
@@ -504,12 +590,19 @@ function drawMonthlyTable(doc: jsPDF, y: number, months: MonthProjection[], t: T
 
     let x = M + 2;
     vals.forEach((val, i) => {
-      if (i === 3) { doc.setTextColor(...(m.netCashFlow < 0 ? C.rHigh : C.text)); doc.setFont("helvetica", "normal"); }
-      else if (i === 4) { doc.setTextColor(...(m.negative ? C.rHigh : m.belowBuffer ? C.rMed : C.text)); doc.setFont("helvetica", "bold"); }
-      else if (i === 5) { doc.setTextColor(...(m.negative ? C.rHigh : m.belowBuffer ? C.rMed : C.rLow)); doc.setFont("helvetica", "normal"); }
-      else { doc.setTextColor(...C.text); doc.setFont("helvetica", "normal"); }
-      doc.text(val, x, y + 4);
-      x += colW[i] ?? 0;
+      if (i === 3) { doc.setTextColor(...(m.netCashFlow < 0 ? C.rHigh : C.text)); setFont(doc, "normal", 7); }
+      else if (i === 4) { doc.setTextColor(...(m.negative ? C.rHigh : m.belowBuffer ? C.rMed : C.text)); setFont(doc, "bold", 7); }
+      else if (i === 5) { doc.setTextColor(...(m.negative ? C.rHigh : m.belowBuffer ? C.rMed : C.rLow)); setFont(doc, "normal", 7); }
+      else { doc.setTextColor(...C.text); setFont(doc, "normal", 7); }
+      // Truncate if value is wider than column
+      const colWidth = colW[i]!;
+      let text = val;
+      if (textW(doc, text) > colWidth - 2) {
+        const lines = splitText(doc, text, colWidth - 2);
+        text = lines[0] as string;
+      }
+      doc.text(text, x, y + 4.5);
+      x += colWidth;
     });
 
     doc.setDrawColor(...C.border);
@@ -523,11 +616,10 @@ function drawMonthlyTable(doc: jsPDF, y: number, months: MonthProjection[], t: T
 
 function drawRecommendations(doc: jsPDF, y: number, recs: Recommendation[], t: T): number {
   y = secTitleKeep(doc, t("pdf.recommendedNextSteps"), y, 24);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
+  setFont(doc, "normal", 7);
   doc.setTextColor(...C.muted);
   const sub = t("pdf.recIntro");
-  const sl = doc.splitTextToSize(sub, CW);
+  const sl = splitText(doc, sub, CW);
   doc.text(sl, M, y);
   y += (sl.length as number) * LH_S + 3;
 
@@ -552,73 +644,66 @@ function drawRecommendations(doc: jsPDF, y: number, recs: Recommendation[], t: T
     }
     y = ensure(doc, y, 20);
 
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9.5);
+    setFont(doc, "bold", 9.5);
     doc.setTextColor(...C.text);
-    const tl = doc.splitTextToSize(rec.title, RW - 26);
+    const tl = splitText(doc, rec.title, RW - 26);
     doc.text(tl, RX, y + 4);
 
     const pl = t("pdf.priorityBadge", { priority: localizedPriorityLabel(rec.priority, t) });
-    const pw = doc.getTextWidth(pl) + 6;
+    setFont(doc, "bold", 6.5);
+    const pw = textW(doc, pl) + 6;
     doc.setFillColor(...pc);
     doc.roundedRect(M + CW - pw - 2, y + 0.5, pw, 5, 1, 1, "F");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(6.5);
     doc.setTextColor(255, 255, 255);
     doc.text(pl, M + CW - pw / 2 - 2, y + 4, { align: "center" });
 
     y += (tl.length as number) * LH + 2;
 
     y = subH2(doc, t("pdf.whySelected"), y, RX);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
+    setFont(doc, "normal", 7.5);
     doc.setTextColor(...C.text);
     for (const reason of rec.triggerReasons) {
       y = ensure(doc, y, LH_S);
-      const rl = doc.splitTextToSize(`\u2022  ${reason}`, BW);
+      const rl = splitText(doc, `\u2022  ${reason}`, BW);
       doc.text(rl, RX + 3, y);
       y += (rl.length as number) * LH_S;
     }
     y += 2;
 
     y = subH2(doc, t("pdf.actionSteps"), y, RX);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
+    setFont(doc, "normal", 7.5);
     doc.setTextColor(...C.text);
     rec.actionSteps.forEach((s, i) => {
       y = ensure(doc, y, LH_S);
-      const rl = doc.splitTextToSize(`${i + 1}.  ${s.text}`, BW);
+      const rl = splitText(doc, `${i + 1}.  ${s.text}`, BW);
       doc.text(rl, RX + 3, y);
       y += (rl.length as number) * LH_S;
     });
     y += 2;
 
     y = subH2(doc, t("pdf.expectedImpact"), y, RX);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
+    setFont(doc, "normal", 7.5);
     doc.setTextColor(...C.text);
-    const il = doc.splitTextToSize(rec.expectedImpact, BW);
+    const il = splitText(doc, rec.expectedImpact, BW);
     doc.text(il, RX + 3, y);
     y += (il.length as number) * LH_S + 1;
 
     if (rec.impactStatus === "not_quantified") {
       y = ensure(doc, y, LH_S);
-      doc.setFont("helvetica", "italic");
-      doc.setFontSize(7);
+      setFont(doc, "italic", 7);
       doc.setTextColor(...C.rMed);
-      const nl = doc.splitTextToSize(t("ap.impactNotQuantified"), BW);
+      const nl = splitText(doc, t("ap.impactNotQuantified"), BW);
       doc.text(nl, RX + 3, y);
       y += (nl.length as number) * LH_S;
     }
 
     if (rec.limitations.length > 0) {
       y = subH2(doc, t("pdf.limitations"), y, RX);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(7);
+      setFont(doc, "normal", 7);
       doc.setTextColor(...C.muted);
       for (const lim of rec.limitations) {
         y = ensure(doc, y, LH_S);
-        const rl = doc.splitTextToSize(`\u2022  ${lim}`, BW);
+        const rl = splitText(doc, `\u2022  ${lim}`, BW);
         doc.text(rl, RX + 3, y);
         y += (rl.length as number) * LH_S;
       }
@@ -627,12 +712,11 @@ function drawRecommendations(doc: jsPDF, y: number, recs: Recommendation[], t: T
     if (rec.missingInformation.length > 0) {
       y += 1;
       y = subH2(doc, t("pdf.informationNeeded"), y, RX);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(7);
+      setFont(doc, "normal", 7);
       doc.setTextColor(...C.muted);
       for (const info of rec.missingInformation) {
         y = ensure(doc, y, LH_S);
-        const rl = doc.splitTextToSize(`\u2022  ${info}`, BW);
+        const rl = splitText(doc, `\u2022  ${info}`, BW);
         doc.text(rl, RX + 3, y);
         y += (rl.length as number) * LH_S;
       }
@@ -663,15 +747,13 @@ function drawFooter(doc: jsPDF, t: T): void {
       doc.setLineWidth(0.4);
       doc.line(M, y, M + CW, y);
       y += 4;
-      doc.setFont("helvetica", "italic");
-      doc.setFontSize(6.5);
+      setFont(doc, "italic", 6.5);
       doc.setTextColor(...C.muted);
       const disc = t("pdf.disclaimer");
-      const dl = doc.splitTextToSize(disc, CW);
+      const dl = splitText(doc, disc, CW);
       doc.text(dl, M, y);
     }
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(6.5);
+    setFont(doc, "normal", 6.5);
     doc.setTextColor(...C.lightMuted);
     doc.text(t("pdf.pageFooter", { p, pc }), PW - M, PH - 5, { align: "right" });
   }
@@ -686,10 +768,11 @@ function secTitle(doc: jsPDF, title: string, y: number): number {
   y = ensure(doc, y, 12);
   doc.setFillColor(...C.navy);
   doc.rect(M, y - 1, 2, 5.5, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(11.5);
+  setFont(doc, "bold", 11.5);
   doc.setTextColor(...C.navy);
-  doc.text(title, M + 5, y + 3);
+  // Wrap long Vietnamese section titles
+  const titleLines = splitText(doc, title, CW - 5);
+  doc.text(titleLines[0] as string, M + 5, y + 3);
   y += 6;
   doc.setDrawColor(...C.border);
   doc.setLineWidth(0.2);
@@ -705,8 +788,7 @@ function secTitleKeep(doc: jsPDF, title: string, y: number, minContent: number):
 
 function subH2(doc: jsPDF, text: string, y: number, x: number): number {
   y = ensure(doc, y, LH_S + 1);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(7.5);
+  setFont(doc, "bold", 7.5);
   doc.setTextColor(...C.muted);
   doc.text(text, x, y);
   return y + LH_S;
@@ -714,35 +796,35 @@ function subH2(doc: jsPDF, text: string, y: number, x: number): number {
 
 function estimateRecHeight(doc: jsPDF, rec: Recommendation, rw: number, bw: number): number {
   let h = 0;
-  const tl = doc.splitTextToSize(rec.title, rw - 26);
+  const tl = splitText(doc, rec.title, rw - 26);
   h += (tl.length as number) * LH + 2;
   h += LH_S;
   for (const r of rec.triggerReasons) {
-    const rl = doc.splitTextToSize(`\u2022  ${r}`, bw);
+    const rl = splitText(doc, `\u2022  ${r}`, bw);
     h += (rl.length as number) * LH_S;
   }
   h += 2;
   h += LH_S;
   for (const s of rec.actionSteps) {
-    const rl = doc.splitTextToSize(`1.  ${s.text}`, bw);
+    const rl = splitText(doc, `1.  ${s.text}`, bw);
     h += (rl.length as number) * LH_S;
   }
   h += 2;
   h += LH_S;
-  const il = doc.splitTextToSize(rec.expectedImpact, bw);
+  const il = splitText(doc, rec.expectedImpact, bw);
   h += (il.length as number) * LH_S + 1;
   if (rec.impactStatus === "not_quantified") h += LH_S;
   if (rec.limitations.length > 0) {
     h += LH_S;
     for (const l of rec.limitations) {
-      const rl = doc.splitTextToSize(`\u2022  ${l}`, bw);
+      const rl = splitText(doc, `\u2022  ${l}`, bw);
       h += (rl.length as number) * LH_S;
     }
   }
   if (rec.missingInformation.length > 0) {
     h += 1 + LH_S;
     for (const info of rec.missingInformation) {
-      const rl = doc.splitTextToSize(`\u2022  ${info}`, bw);
+      const rl = splitText(doc, `\u2022  ${info}`, bw);
       h += (rl.length as number) * LH_S;
     }
   }
@@ -752,10 +834,9 @@ function estimateRecHeight(doc: jsPDF, rec: Recommendation, rw: number, bw: numb
 
 function body(doc: jsPDF, text: string, y: number): number {
   y = ensure(doc, y, LH * 2);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
+  setFont(doc, "normal", 7.5);
   doc.setTextColor(...C.text);
-  const l = doc.splitTextToSize(text, CW);
+  const l = splitText(doc, text, CW);
   doc.text(l, M, y);
   y += (l.length as number) * LH;
   return y;
@@ -763,13 +844,20 @@ function body(doc: jsPDF, text: string, y: number): number {
 
 function kvRow(doc: jsPDF, key: string, value: string, y: number): number {
   y = ensure(doc, y, LH + 1);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
+  setFont(doc, "normal", 8.5);
   doc.setTextColor(...C.muted);
-  doc.text(key, M, y);
-  doc.setFont("helvetica", "bold");
+  const keyLines = splitText(doc, key, 60);
+  doc.text(keyLines, M, y);
+  setFont(doc, "bold", 8.5);
   doc.setTextColor(...C.text);
-  doc.text(value, M + 65, y);
+  // Position value at fixed offset; if value is too long, wrap it
+  const valMaxW = CW - 65;
+  const valLines = splitText(doc, value, valMaxW);
+  doc.text(valLines[0] as string, M + 65, y);
+  // If value wrapped to multiple lines, advance for extra lines
+  if (valLines.length > 1) {
+    y += (valLines.length - 1) * LH_S;
+  }
   doc.setDrawColor(...C.border);
   doc.setLineWidth(0.12);
   doc.line(M, y + 1.5, M + CW, y + 1.5);
@@ -780,8 +868,7 @@ function drawLeg(doc: jsPDF, x: number, y: number, color: [number, number, numbe
   doc.setDrawColor(...color);
   doc.setLineWidth(0.8);
   doc.line(x, y, x + 5, y);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(6);
+  setFont(doc, "normal", 6);
   doc.setTextColor(...C.text);
   doc.text(label, x + 7, y + 1);
 }
@@ -792,12 +879,11 @@ function drawLegDash(doc: jsPDF, x: number, y: number, color: [number, number, n
   doc.setLineDashPattern([2, 1], 0);
   doc.line(x, y, x + 5, y);
   doc.setLineDashPattern([], 0);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(6);
+  setFont(doc, "normal", 6);
   doc.setTextColor(...C.text);
   doc.text(label, x + 7, y + 1);
 }
 
 function legW(doc: jsPDF, label: string): number {
-  return 7 + doc.getTextWidth(label) + 3;
+  return 7 + textW(doc, label) + 3;
 }

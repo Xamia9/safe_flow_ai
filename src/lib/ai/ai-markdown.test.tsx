@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { AiExplanation } from "@/components/common/AiExplanation";
 import { normalizeAiMarkdown } from "@/components/common/AiMarkdown";
-import { EXPLAIN_RESULTS_PROMPT, GENERATE_ACTION_PLAN_PROMPT } from "@/lib/ai/groq";
+import {
+  EXPLAIN_RESULTS_PROMPT,
+  GENERATE_ACTION_PLAN_PROMPT,
+  EXPLAIN_SECTION_HEADINGS,
+  ACTION_PLAN_SECTION_HEADINGS,
+} from "@/lib/ai/groq";
 import { LanguageProvider } from "@/i18n/LanguageContext";
 
 const show = (text: string | null) =>
@@ -10,10 +15,12 @@ const show = (text: string | null) =>
 
 describe("system prompts", () => {
   it("explain prompt is concise and structured", () => {
-    for (const s of ["120 words", "**Key Findings**", "**What This Means**", "**Important Note**", "Markdown only"]) expect(EXPLAIN_RESULTS_PROMPT).toContain(s);
+    for (const s of ["120 words", "{SECTION_HEADINGS}", "Markdown only"]) expect(EXPLAIN_RESULTS_PROMPT).toContain(s);
+    for (const s of ["**Key Findings**", "**What This Means**", "**Important Note**"]) expect(EXPLAIN_SECTION_HEADINGS.en).toContain(s);
   });
   it("action plan prompt focuses on one solution", () => {
-    for (const s of ["200 words", "ONE solution", "**Simulation Takeaway**", "**Your Action Steps**", "**What to Watch**", "**Important Note**", "Never invent"]) expect(GENERATE_ACTION_PLAN_PROMPT).toContain(s);
+    for (const s of ["200 words", "ONE solution", "{SECTION_HEADINGS}", "Never invent"]) expect(GENERATE_ACTION_PLAN_PROMPT).toContain(s);
+    for (const s of ["**Simulation Takeaway**", "**Your Action Steps**", "**What to Watch**", "**Important Note**"]) expect(ACTION_PLAN_SECTION_HEADINGS.en).toContain(s);
   });
 });
 

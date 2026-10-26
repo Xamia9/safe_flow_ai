@@ -399,3 +399,81 @@ describe("callGroq — caller cannot override model or feature", () => {
     expect(() => validateAiRequest(badInput)).toThrow();
   });
 });
+
+describe("callGroq — language-specific section headings", () => {
+  function getSystemMsg(fetchFn: ReturnType<typeof mockFetch>): string {
+    const calls = (fetchFn as unknown as { mock: { calls: unknown[][] } }).mock
+      .calls;
+    const callArgs = calls[0];
+    if (!callArgs) throw new Error("fetch was not called");
+    const body = JSON.parse((callArgs[1] as RequestInit).body as string) as {
+      messages: { role: string; content: string }[];
+    };
+    const systemMsg = body.messages.find((m) => m.role === "system");
+    if (!systemMsg) throw new Error("no system message");
+    return systemMsg.content;
+  }
+
+  it("includes English section headings for explain_results in en", async () => {
+    const fetchFn = mockFetch(async () => groqResponse("ok"));
+    await callGroq(
+      { feature: "explain_results", context: "Scenario: test.", language: "en" },
+      VALID_KEY,
+      { fetchFn },
+    );
+    const sys = getSystemMsg(fetchFn);
+    expect(sys).toContain("**Key Findings**");
+    expect(sys).toContain("**What This Means**");
+    expect(sys).not.toContain("**Điểm chính**");
+  });
+
+  it("includes Vietnamese section headings for explain_results in vi", async () => {
+    const fetchFn = mockFetch(async () => groqResponse("ok"));
+    await callGroq(
+      { feature: "explain_results", context: "Scenario: test.", language: "vi" },
+      VALID_KEY,
+      { fetchFn },
+    );
+    const sys = getSystemMsg(fetchFn);
+    expect(sys).toContain("**Điểm chính**");
+    expect(sys).toContain("**Ý nghĩa**");
+    expect(sys).not.toContain("**Key Findings**");
+  });
+
+  it("includes English section headings for generate_action_plan in en", async () => {
+    const fetchFn = mockFetch(async () => groqResponse("ok"));
+    await callGroq(
+      { feature: "generate_action_plan", context: "Scenario: test.", language: "en" },
+      VALID_KEY,
+      { fetchFn },
+    );
+    const sys = getSystemMsg(fetchFn);
+    expect(sys).toContain("**Simulation Takeaway**");
+    expect(sys).toContain("**Your Action Steps**");
+    expect(sys).not.toContain("**Tóm tắt mô phỏng**");
+  });
+
+  it("includes Vietnamese section headings for generate_action_plan in vi", async () => {
+    const fetchFn = mockFetch(async () => groqResponse("ok"));
+    await callGroq(
+      { feature: "generate_action_plan", context: "Scenario: test.", language: "vi" },
+      VALID_KEY,
+      { fetchFn },
+    );
+    const sys = getSystemMsg(fetchFn);
+    expect(sys).toContain("**Tóm tắt mô phỏng**");
+    expect(sys).toContain("**Các bước hành động**");
+    expect(sys).not.toContain("**Simulation Takeaway**");
+  });
+
+  it("does not leave the {SECTION_HEADINGS} placeholder unresolved", async () => {
+    const fetchFn = mockFetch(async () => groqResponse("ok"));
+    await callGroq(
+      { feature: "explain_results", context: "Scenario: test.", language: "vi" },
+      VALID_KEY,
+      { fetchFn },
+    );
+    const sys = getSystemMsg(fetchFn);
+    expect(sys).not.toContain("{SECTION_HEADINGS}");
+  });
+});

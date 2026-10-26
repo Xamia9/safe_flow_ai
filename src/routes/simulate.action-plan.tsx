@@ -65,6 +65,8 @@ function ActionPlan() {
   const [selectedSolutionId, setSelectedSolutionId] = useState<SolutionId | null>(null);
   const ai = useAiExplain();
   const aiSectionRef = useRef<HTMLElement>(null);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   useEffect(() => {
     if (selectedSolutionId !== null && aiSectionRef.current) {
@@ -133,13 +135,30 @@ function ActionPlan() {
     ai.call("generate_action_plan", ctx, language);
   };
 
+  const handleExportPdf = async () => {
+    setPdfError(null);
+    setPdfLoading(true);
+    try {
+      await exportSimulationPdf(profile, scenario, t);
+    } catch {
+      setPdfError(t("ap.exportPdfError"));
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
   const canGenerateAiPlan = selectedRec !== null;
 
   return (
     <div className="space-y-8">
       <PageHeader eyebrow={t("ap.eyebrow")} title={t("ap.title")}
         description={t("ap.description")}
-        actions={<Button type="button" onClick={() => exportSimulationPdf(profile, scenario, t)}><Download /> {t("ap.exportPdf")}</Button>} />
+        actions={<Button type="button" onClick={handleExportPdf} disabled={pdfLoading}><Download /> {pdfLoading ? t("ap.exporting") : t("ap.exportPdf")}</Button>} />
+      {pdfError && (
+        <p role="alert" className="rounded-lg border border-negative/30 bg-negative/10 px-4 py-2 text-sm text-negative">
+          {pdfError}
+        </p>
+      )}
       <Summary profile={profile} scenario={scenario} />
       <RecommendationPanel
         profile={profile}
